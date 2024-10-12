@@ -22,6 +22,7 @@ mv templates/example templates/mysuperplugin # Rename templates folder.
 
 1. Edit `manifest.json` and change the organisation name to your GitHub username.
 1. Push your changes to GitHub.
+  ``` git init --initial-branch=main; git add .; git commit -m "initial commit"; git remote add origin https://github.com/[my-user-name]/mysuperplugin.git; git push --set-upstream origin main```
 1. In GitHub create a new release for your extension repo. Tag the release with `0.0.1`
 1. Copy the URL of the extension's raw `manifest.json` URL `https://raw.githubusercontent.com/[my-user-name]/mysuperplugin/master/manifest.json`
 1. If you are using the LMNbits Admin UI, go to the Admin UI > Server > Extension Sources, click "Add", paste the URL, then click "Save"
