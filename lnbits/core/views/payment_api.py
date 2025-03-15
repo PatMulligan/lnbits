@@ -124,7 +124,6 @@ async def api_payments_counting_stats(
     count_by: PaymentCountField = Query("tag"),
     filters: Filters[PaymentFilters] = Depends(parse_filters(PaymentFilters)),
 ):
-
     return await get_payment_count_stats(count_by, filters)
 
 
@@ -138,7 +137,6 @@ async def api_payments_counting_stats(
 async def api_payments_wallets_stats(
     filters: Filters[PaymentFilters] = Depends(parse_filters(PaymentFilters)),
 ):
-
     return await get_wallets_stats(filters)
 
 
@@ -152,7 +150,6 @@ async def api_payments_daily_stats(
     user: User = Depends(check_user_exists),
     filters: Filters[PaymentFilters] = Depends(parse_filters(PaymentFilters)),
 ):
-
     if not user.admin:
         exc = HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
@@ -316,6 +313,45 @@ async def api_payments_create(
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
             detail="Invoice (or Admin) key required.",
+        )
+
+
+@payment_router.post("/{wallet_id}", status_code=HTTPStatus.CREATED)
+async def api_create_wallet_invoice(
+    wallet_id: str,
+    data: CreateInvoice,
+    admin: User = Depends(require_admin_key),
+) -> Payment:
+    """Create an invoice for a specific wallet (super admin only)"""
+
+    # if not admin.super_user:
+    #     raise HTTPException(
+    #         status_code=HTTPStatus.UNAUTHORIZED,
+    #         detail="Super admin privileges required.",
+    #     )
+
+    # Convert amount to msats if needed
+    if data.unit and data.unit != "sat":
+        amount_msat = await fiat_amount_as_satoshis(data.amount, data.unit)
+    else:
+        amount_msat = data.amount * 1000  # Convert sats to msats
+
+    memo = data.memo or settings.lnbits_site_title
+
+    try:
+        new_payment = await create_invoice(
+            wallet_id=wallet_id,
+            amount=int(amount_msat / 1000),  # Convert back to sats
+            internal=True,
+            memo=memo,
+            extra=data.extra,
+            webhook=data.webhook,
+        )
+        return new_payment
+    except Exception as e:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=str(e),
         )
 
 
