@@ -34,7 +34,20 @@ async def test_invalid_bolt11(to_wallet: Wallet):
 
 
 @pytest.mark.anyio
-async def test_amountless_invoice(to_wallet: Wallet):
+async def test_create_amountless_invoice(to_wallet: Wallet):
+    # Test that we can now create amountless invoices (amount=0)
+    payment = await create_invoice(
+        wallet_id=to_wallet.id, 
+        amount=0, 
+        memo="Amountless invoice test",
+        internal=True  # Use internal to test with FakeWallet
+    )
+    assert payment is not None
+    assert payment.amount == 0
+
+
+@pytest.mark.anyio
+async def test_pay_amountless_invoice(to_wallet: Wallet):
     zero_amount_invoice = (
         "lnbc1pnsu5z3pp57getmdaxhg5kc9yh2a2qsh7cjf4gnccgkw0qenm8vsqv50w7s"
         "ygqdqj0fjhymeqv9kk7atwwscqzzsxqyz5vqsp5e2yyqcp0a3ujeesp24ya0glej"
@@ -42,7 +55,7 @@ async def test_amountless_invoice(to_wallet: Wallet):
         "73aym6ynrdl9nkzqnag49vt3sjjn8qdfq5cr6ha0vrdz5c5r3v4aghndly0hplmv"
         "6hjxepwp93cq398l3s"
     )
-    with pytest.raises(PaymentError, match="Amountless invoices not supported."):
+    with pytest.raises(PaymentError, match="Cannot pay amountless invoice without specifying amount."):
         await pay_invoice(
             wallet_id=to_wallet.id,
             payment_request=zero_amount_invoice,

@@ -87,9 +87,11 @@ class FakeWallet(Wallet):
 
         self.payment_secrets[payment_hash] = preimage.hex()
 
+        # Handle amountless invoices (amount=0)
+        amount_msat = MilliSatoshi(amount * 1000) if amount > 0 else None
         bolt11 = Bolt11(
             currency="bc",
-            amount_msat=MilliSatoshi(amount * 1000),
+            amount_msat=amount_msat,
             date=int(datetime.now().timestamp()),
             tags=tags,
         )

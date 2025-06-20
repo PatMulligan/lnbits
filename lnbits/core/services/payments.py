@@ -61,7 +61,10 @@ async def pay_invoice(
     if settings.lnbits_only_allow_incoming_payments:
         raise PaymentError("Only incoming payments allowed.", status="failed")
     invoice = _validate_payment_request(payment_request, max_sat)
-    assert invoice.amount_msat
+    if invoice.amount_msat is None or invoice.amount_msat == 0:
+        raise PaymentError(
+            "Cannot pay amountless invoice without specifying amount.", status="failed"
+        )
 
     async with db.reuse_conn(conn) if conn else db.connect() as new_conn:
         amount_msat = invoice.amount_msat
@@ -108,8 +111,8 @@ async def create_invoice(
     internal: Optional[bool] = False,
     conn: Optional[Connection] = None,
 ) -> Payment:
-    if not amount > 0:
-        raise InvoiceError("Amountless invoices not supported.", status="failed")
+    if amount < 0:
+        raise InvoiceError("Invoice amount cannot be negative.", status="failed")
 
     user_wallet = await get_wallet(wallet_id, conn=conn)
     if not user_wallet:
@@ -124,20 +127,22 @@ async def create_invoice(
         amount, user_wallet, currency, extra
     )
 
-    if amount_sat > settings.lnbits_max_incoming_payment_amount_sats:
-        raise InvoiceError(
-            f"Invoice amount {amount_sat} sats is too high. Max allowed: "
-            f"{settings.lnbits_max_incoming_payment_amount_sats} sats.",
-            status="failed",
-        )
-    if settings.is_wallet_max_balance_exceeded(
-        user_wallet.balance_msat / 1000 + amount_sat
-    ):
-        raise InvoiceError(
-            f"Wallet balance cannot exceed "
-            f"{settings.lnbits_wallet_limit_max_balance} sats.",
-            status="failed",
-        )
+    # Skip validation checks for amountless invoices (amount=0)
+    if amount_sat > 0:
+        if amount_sat > settings.lnbits_max_incoming_payment_amount_sats:
+            raise InvoiceError(
+                f"Invoice amount {amount_sat} sats is too high. Max allowed: "
+                f"{settings.lnbits_max_incoming_payment_amount_sats} sats.",
+                status="failed",
+            )
+        if settings.is_wallet_max_balance_exceeded(
+            user_wallet.balance_msat / 1000 + amount_sat
+        ):
+            raise InvoiceError(
+                f"Wallet balance cannot exceed "
+                f"{settings.lnbits_wallet_limit_max_balance} sats.",
+                status="failed",
+            )
 
     payment_response = await funding_source.create_invoice(
         amount=amount_sat,
@@ -361,8 +366,11 @@ async def calculate_fiat_amounts(
         if currency != wallet_currency:
             fiat_amounts["fiat_currency"] = currency
             fiat_amounts["fiat_amount"] = round(amount, ndigits=3)
-            fiat_amounts["fiat_rate"] = amount_sat / amount
-            fiat_amounts["btc_rate"] = (amount / amount_sat) * 100_000_000
+            # Avoid division by zero for amountless invoices
+            if amount != 0:
+                fiat_amounts["fiat_rate"] = amount_sat / amount
+            if amount_sat != 0:
+                fiat_amounts["btc_rate"] = (amount / amount_sat) * 100_000_000
     else:
         amount_sat = int(amount)
 
@@ -374,8 +382,13 @@ async def calculate_fiat_amounts(
                 fiat_amount = await satoshis_amount_as_fiat(amount_sat, wallet_currency)
             fiat_amounts["wallet_fiat_currency"] = wallet_currency
             fiat_amounts["wallet_fiat_amount"] = round(fiat_amount, ndigits=3)
-            fiat_amounts["wallet_fiat_rate"] = amount_sat / fiat_amount
-            fiat_amounts["wallet_btc_rate"] = (fiat_amount / amount_sat) * 100_000_000
+            # Avoid division by zero for amountless invoices
+            if fiat_amount != 0:
+                fiat_amounts["wallet_fiat_rate"] = amount_sat / fiat_amount
+            if amount_sat != 0:
+                fiat_amounts["wallet_btc_rate"] = (
+                    fiat_amount / amount_sat
+                ) * 100_000_000
         except Exception as e:
             logger.error(f"Error calculating fiat amount for wallet '{wallet.id}': {e}")
 
@@ -693,17 +706,19 @@ def _validate_payment_request(
     except Exception as exc:
         raise PaymentError("Bolt11 decoding failed.", status="failed") from exc
 
-    if not invoice.amount_msat or not invoice.amount_msat > 0:
-        raise PaymentError("Amountless invoices not supported.", status="failed")
+    if invoice.amount_msat is not None and invoice.amount_msat < 0:
+        raise PaymentError("Invoice amount cannot be negative.", status="failed")
 
-    max_sat = max_sat or settings.lnbits_max_outgoing_payment_amount_sats
-    max_sat = min(max_sat, settings.lnbits_max_outgoing_payment_amount_sats)
-    if invoice.amount_msat > max_sat * 1000:
-        raise PaymentError(
-            f"Invoice amount {invoice.amount_msat // 1000} sats is too high. "
-            f"Max allowed: {max_sat} sats.",
-            status="failed",
-        )
+    # Only check amount limits for invoices with amounts
+    if invoice.amount_msat is not None and invoice.amount_msat > 0:
+        max_sat = max_sat or settings.lnbits_max_outgoing_payment_amount_sats
+        max_sat = min(max_sat, settings.lnbits_max_outgoing_payment_amount_sats)
+        if invoice.amount_msat > max_sat * 1000:
+            raise PaymentError(
+                f"Invoice amount {invoice.amount_msat // 1000} sats is too high. "
+                f"Max allowed: {max_sat} sats.",
+                status="failed",
+            )
 
     return invoice
 
