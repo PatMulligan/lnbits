@@ -340,10 +340,11 @@ async def api_payments_fee_reserve(invoice: str = Query("invoice")) -> JSONRespo
         }
         return JSONResponse(response)
     else:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail="Invoice has no amount.",
-        )
+        # For amountless invoices, return zero fee reserve
+        response = {
+            "fee_reserve": 0,
+        }
+        return JSONResponse(response)
 
 
 @payment_router.post("/lnurl")
