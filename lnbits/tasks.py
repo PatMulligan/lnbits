@@ -2,11 +2,9 @@ import asyncio
 import time
 import traceback
 import uuid
+from collections.abc import Coroutine
 from typing import (
     Callable,
-    Coroutine,
-    Dict,
-    List,
     Optional,
 )
 
@@ -18,11 +16,12 @@ from lnbits.core.crud import (
     update_payment,
 )
 from lnbits.core.models import Payment, PaymentState
+from lnbits.core.services.fiat_providers import handle_fiat_payment_confirmation
 from lnbits.settings import settings
 from lnbits.wallets import get_funding_source
 
-tasks: List[asyncio.Task] = []
-unique_tasks: Dict[str, asyncio.Task] = {}
+tasks: list[asyncio.Task] = []
+unique_tasks: dict[str, asyncio.Task] = {}
 
 
 def create_task(coro: Coroutine) -> asyncio.Task:
@@ -82,7 +81,7 @@ async def catch_everything_and_restart(
         return await catch_everything_and_restart(func, name)
 
 
-invoice_listeners: Dict[str, asyncio.Queue] = {}
+invoice_listeners: dict[str, asyncio.Queue] = {}
 
 
 # TODO: name should not be optional
@@ -104,6 +103,13 @@ def register_invoice_listener(send_chan: asyncio.Queue, name: Optional[str] = No
 
 
 internal_invoice_queue: asyncio.Queue = asyncio.Queue(0)
+
+
+async def internal_invoice_queue_put(checking_id: str) -> None:
+    """
+    A method to call when it wants to notify about an internal invoice payment.
+    """
+    await internal_invoice_queue.put(checking_id)
 
 
 async def internal_invoice_listener() -> None:
@@ -200,15 +206,23 @@ async def invoice_callback_dispatcher(checking_id: str, is_internal: bool = Fals
     invoice_listeners from core and extensions.
     """
     payment = await get_standalone_payment(checking_id, incoming=True)
-    if payment and payment.is_in:
-        status = await payment.check_status()
-        payment.fee = status.fee_msat or 0
-        # only overwrite preimage if status.preimage provides it
-        payment.preimage = status.preimage or payment.preimage
-        payment.status = PaymentState.SUCCESS
-        await update_payment(payment)
-        internal = "internal" if is_internal else ""
-        logger.success(f"{internal} invoice {checking_id} settled")
-        for name, send_chan in invoice_listeners.items():
-            logger.trace(f"invoice listeners: sending to `{name}`")
-            await send_chan.put(payment)
+    if not payment:
+        logger.warning(f"No payment found for '{checking_id}'.")
+        return
+    if not payment.is_in:
+        logger.warning(f"Payment '{checking_id}' is not incoming, skipping.")
+        return
+
+    status = await payment.check_status(skip_internal_payment_notifications=True)
+    payment.fee = status.fee_msat or payment.fee
+    # only overwrite preimage if status.preimage provides it
+    payment.preimage = status.preimage or payment.preimage
+    payment.status = PaymentState.SUCCESS
+    await update_payment(payment)
+    if payment.fiat_provider:
+        await handle_fiat_payment_confirmation(payment)
+    internal = "internal" if is_internal else ""
+    logger.success(f"{internal} invoice {checking_id} settled")
+    for name, send_chan in invoice_listeners.items():
+        logger.trace(f"invoice listeners: sending to `{name}`")
+        await send_chan.put(payment)

@@ -2,11 +2,13 @@ import asyncio
 import hashlib
 import json
 import time
-from typing import AsyncGenerator, Dict, Optional
+from collections.abc import AsyncGenerator
+from typing import Optional
 
 import httpx
 from loguru import logger
 
+from lnbits.helpers import normalize_endpoint
 from lnbits.settings import settings
 
 from .base import (
@@ -36,7 +38,7 @@ class LnTipsWallet(Wallet):
                 "missing lntips_api_key or lntips_admin_key or lntips_invoice_key"
             )
 
-        self.endpoint = self.normalize_endpoint(settings.lntips_api_endpoint)
+        self.endpoint = normalize_endpoint(settings.lntips_api_endpoint)
 
         headers = {
             "Authorization": f"Basic {key}",
@@ -72,7 +74,7 @@ class LnTipsWallet(Wallet):
         unhashed_description: Optional[bytes] = None,
         **_,
     ) -> InvoiceResponse:
-        data: Dict = {"amount": amount, "description_hash": "", "memo": memo or ""}
+        data: dict = {"amount": amount, "description_hash": "", "memo": memo or ""}
         if description_hash:
             data["description_hash"] = description_hash.hex()
         elif unhashed_description:

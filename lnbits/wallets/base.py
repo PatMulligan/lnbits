@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, AsyncGenerator, Coroutine, NamedTuple
+from collections.abc import AsyncGenerator, Coroutine
+from typing import TYPE_CHECKING, NamedTuple
 
 from loguru import logger
 
@@ -150,17 +151,3 @@ class Wallet(ABC):
                 except Exception as exc:
                     logger.error(f"could not get status of invoice {invoice}: '{exc}' ")
             await asyncio.sleep(5)
-
-    def normalize_endpoint(self, endpoint: str, add_proto=True) -> str:
-        endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
-        if add_proto:
-            if endpoint.startswith("ws://") or endpoint.startswith("wss://"):
-                return endpoint
-            endpoint = (
-                f"https://{endpoint}" if not endpoint.startswith("http") else endpoint
-            )
-        return endpoint
-
-
-class UnsupportedError(Exception):
-    pass

@@ -2,7 +2,7 @@ import base64
 import json
 import time
 from http import HTTPStatus
-from typing import List, Optional
+from typing import Optional
 from uuid import uuid4
 
 import shortuuid
@@ -100,6 +100,7 @@ async def api_create_user(data: CreateUser) -> CreateUser:
         username=data.username,
         email=data.email,
         pubkey=data.pubkey,
+        external_id=data.external_id,
         extra=data.extra,
     )
     account.validate_fields()
@@ -132,6 +133,7 @@ async def api_update_user(
         username=data.username,
         email=data.email,
         pubkey=data.pubkey,
+        external_id=data.external_id,
         extra=data.extra or UserExtra(),
     )
     await update_user_account(account)
@@ -214,7 +216,7 @@ async def api_users_toggle_admin(user_id: str) -> SimpleStatus:
 
 
 @users_router.get("/user/{user_id}/wallet", name="Get wallets for user")
-async def api_users_get_user_wallet(user_id: str) -> List[Wallet]:
+async def api_users_get_user_wallet(user_id: str) -> list[Wallet]:
     return await get_wallets(user_id)
 
 

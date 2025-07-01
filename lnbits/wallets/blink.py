@@ -1,15 +1,17 @@
 import asyncio
 import hashlib
 import json
-from typing import AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
+from typing import Optional
 
 import httpx
 from loguru import logger
 from pydantic import BaseModel
-from websockets.client import WebSocketClientProtocol, connect
+from websockets.legacy.client import WebSocketClientProtocol, connect
 from websockets.typing import Subprotocol
 
 from lnbits import bolt11
+from lnbits.helpers import normalize_endpoint
 from lnbits.settings import settings
 
 from .base import (
@@ -34,13 +36,13 @@ class BlinkWallet(Wallet):
         if not settings.blink_token:
             raise ValueError("cannot initialize BlinkWallet: missing blink_token")
 
-        self.endpoint = self.normalize_endpoint(settings.blink_api_endpoint)
+        self.endpoint = normalize_endpoint(settings.blink_api_endpoint)
 
         self.auth = {
             "X-API-KEY": settings.blink_token,
             "User-Agent": settings.user_agent,
         }
-        self.ws_endpoint = self.normalize_endpoint(settings.blink_ws_endpoint)
+        self.ws_endpoint = normalize_endpoint(settings.blink_ws_endpoint)
         self.ws_auth = {
             "type": "connection_init",
             "payload": {"X-API-KEY": settings.blink_token},

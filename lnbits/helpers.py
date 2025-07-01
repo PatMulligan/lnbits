@@ -3,7 +3,7 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional, Type
+from typing import Any, Optional
 from urllib import request
 from urllib.parse import urlparse
 
@@ -17,7 +17,6 @@ from pydantic.schema import field_schema
 
 from lnbits.jinja2_templating import Jinja2Templates
 from lnbits.nodes import get_node_class
-from lnbits.requestvars import g
 from lnbits.settings import settings
 from lnbits.utils.crypto import AESCipher
 
@@ -42,7 +41,7 @@ def urlsafe_short_hash() -> str:
 
 
 def url_for(endpoint: str, external: Optional[bool] = False, **params: Any) -> str:
-    base = g().base_url if external else ""
+    base = f"http://{settings.host}:{settings.port}" if external else ""
     url_params = "?"
     for key, value in params.items():
         url_params += f"{key}={value}&"
@@ -154,7 +153,7 @@ def get_current_extension_name() -> str:
     return ext_name
 
 
-def generate_filter_params_openapi(model: Type[FilterModel], keep_optional=False):
+def generate_filter_params_openapi(model: type[FilterModel], keep_optional=False):
     """
     Generate openapi documentation for Filters. This is intended to be used along
     parse_filters (see example)
@@ -196,6 +195,14 @@ def is_valid_email_address(email: str) -> bool:
 def is_valid_username(username: str) -> bool:
     username_regex = r"(?=[a-zA-Z0-9._]{2,20}$)(?!.*[_.]{2})[^_.].*[^_.]"
     return re.fullmatch(username_regex, username) is not None
+
+
+def is_valid_external_id(external_id: str) -> bool:
+    if len(external_id) > 256:
+        return False
+    if " " in external_id or "\n" in external_id:
+        return False
+    return True
 
 
 def is_valid_pubkey(pubkey: str) -> bool:
@@ -355,3 +362,14 @@ def safe_upload_file_path(filename: str, directory: str = "images") -> Path:
     # Prevent filename with subdirectories
     file_path = image_folder / filename.split("/")[-1]
     return file_path.resolve()
+
+
+def normalize_endpoint(endpoint: str, add_proto=True) -> str:
+    endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
+    if add_proto:
+        if endpoint.startswith("ws://") or endpoint.startswith("wss://"):
+            return endpoint
+        endpoint = (
+            f"https://{endpoint}" if not endpoint.startswith("http") else endpoint
+        )
+    return endpoint

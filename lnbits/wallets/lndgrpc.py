@@ -1,8 +1,9 @@
 import asyncio
 import base64
+from collections.abc import AsyncGenerator
 from hashlib import sha256
 from os import environ
-from typing import AsyncGenerator, Dict, Optional
+from typing import Optional
 
 import grpc
 from loguru import logger
@@ -11,6 +12,7 @@ import lnbits.wallets.lnd_grpc_files.lightning_pb2 as ln
 import lnbits.wallets.lnd_grpc_files.lightning_pb2_grpc as lnrpc
 import lnbits.wallets.lnd_grpc_files.router_pb2 as router
 import lnbits.wallets.lnd_grpc_files.router_pb2_grpc as routerrpc
+from lnbits.helpers import normalize_endpoint
 from lnbits.settings import settings
 from lnbits.utils.crypto import random_secret_and_hash
 
@@ -72,9 +74,7 @@ class LndWallet(Wallet):
                 "cannot initialize LndWallet: missing lnd_grpc_cert or lnd_cert"
             )
 
-        self.endpoint = self.normalize_endpoint(
-            settings.lnd_grpc_endpoint, add_proto=False
-        )
+        self.endpoint = normalize_endpoint(settings.lnd_grpc_endpoint, add_proto=False)
         self.port = int(settings.lnd_grpc_port)
 
         macaroon = (
@@ -122,7 +122,7 @@ class LndWallet(Wallet):
         unhashed_description: Optional[bytes] = None,
         **kwargs,
     ) -> InvoiceResponse:
-        data: Dict = {
+        data: dict = {
             "description_hash": b"",
             "value": amount,
             "private": True,

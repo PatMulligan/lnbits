@@ -1,5 +1,7 @@
 import base64
 
+from lnbits.exceptions import UnsupportedError
+
 try:
     import breez_sdk  # type: ignore
 
@@ -18,8 +20,9 @@ if not BREEZ_SDK_INSTALLED:
 
 else:
     import asyncio
+    from collections.abc import AsyncGenerator
     from pathlib import Path
-    from typing import AsyncGenerator, Optional
+    from typing import Optional
 
     from loguru import logger
 
@@ -34,7 +37,6 @@ else:
         PaymentStatus,
         PaymentSuccessStatus,
         StatusResponse,
-        UnsupportedError,
         Wallet,
     )
 

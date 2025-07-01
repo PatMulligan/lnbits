@@ -2,7 +2,7 @@ import json
 import ssl
 from http import HTTPStatus
 from math import ceil
-from typing import List, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -34,13 +34,8 @@ from lnbits.core.models import (
     PaymentFilters,
     PaymentHistoryPoint,
     PaymentWalletStats,
-    Wallet,
 )
 from lnbits.core.models.users import User
-from lnbits.core.services.payments import (
-    get_payments_daily_stats,
-    update_pending_payment,
-)
 from lnbits.db import Filters, Page
 from lnbits.decorators import (
     WalletTypeInfo,
@@ -67,9 +62,12 @@ from ..crud import (
     get_wallet_for_key,
 )
 from ..services import (
-    create_invoice,
+    create_fiat_invoice,
+    create_wallet_invoice,
     fee_reserve_total,
+    get_payments_daily_stats,
     pay_invoice,
+    update_pending_payment,
     update_pending_payments,
 )
 
@@ -81,7 +79,7 @@ payment_router = APIRouter(prefix="/api/v1/payments", tags=["Payments"])
     name="Payment List",
     summary="get list of payments",
     response_description="list of payments",
-    response_model=List[Payment],
+    response_model=list[Payment],
     openapi_extra=generate_filter_params_openapi(PaymentFilters),
 )
 async def api_payments(
@@ -100,7 +98,7 @@ async def api_payments(
 @payment_router.get(
     "/history",
     name="Get payments history",
-    response_model=List[PaymentHistoryPoint],
+    response_model=list[PaymentHistoryPoint],
     openapi_extra=generate_filter_params_openapi(PaymentFilters),
 )
 async def api_payments_history(
@@ -115,7 +113,7 @@ async def api_payments_history(
 @payment_router.get(
     "/stats/count",
     name="Get payments history for all users",
-    response_model=List[PaymentCountStat],
+    response_model=list[PaymentCountStat],
     openapi_extra=generate_filter_params_openapi(PaymentFilters),
 )
 async def api_payments_counting_stats(
@@ -137,7 +135,7 @@ async def api_payments_counting_stats(
 @payment_router.get(
     "/stats/wallets",
     name="Get payments history for all users",
-    response_model=List[PaymentWalletStats],
+    response_model=list[PaymentWalletStats],
     openapi_extra=generate_filter_params_openapi(PaymentFilters),
 )
 async def api_payments_wallets_stats(
@@ -158,7 +156,7 @@ async def api_payments_wallets_stats(
 @payment_router.get(
     "/stats/daily",
     name="Get payments history per day",
-    response_model=List[PaymentDailyStats],
+    response_model=list[PaymentDailyStats],
     openapi_extra=generate_filter_params_openapi(PaymentFilters),
 )
 async def api_payments_daily_stats(
@@ -196,69 +194,6 @@ async def api_payments_paginated(
             await update_pending_payment(payment)
 
     return page
-
-
-async def _api_payments_create_invoice(data: CreateInvoice, wallet: Wallet):
-    description_hash = b""
-    unhashed_description = b""
-    memo = data.memo or settings.lnbits_site_title
-    if data.description_hash or data.unhashed_description:
-        if data.description_hash:
-            try:
-                description_hash = bytes.fromhex(data.description_hash)
-            except ValueError as exc:
-                raise HTTPException(
-                    status_code=HTTPStatus.BAD_REQUEST,
-                    detail="'description_hash' must be a valid hex string",
-                ) from exc
-        if data.unhashed_description:
-            try:
-                unhashed_description = bytes.fromhex(data.unhashed_description)
-            except ValueError as exc:
-                raise HTTPException(
-                    status_code=HTTPStatus.BAD_REQUEST,
-                    detail="'unhashed_description' must be a valid hex string",
-                ) from exc
-        # do not save memo if description_hash or unhashed_description is set
-        memo = ""
-
-    payment = await create_invoice(
-        wallet_id=wallet.id,
-        amount=data.amount,
-        memo=memo,
-        currency=data.unit,
-        description_hash=description_hash,
-        unhashed_description=unhashed_description,
-        expiry=data.expiry,
-        extra=data.extra,
-        webhook=data.webhook,
-        internal=data.internal,
-    )
-
-    # lnurl_response is not saved in the database
-    if data.lnurl_callback:
-        headers = {"User-Agent": settings.user_agent}
-        async with httpx.AsyncClient(headers=headers) as client:
-            try:
-                check_callback_url(data.lnurl_callback)
-                r = await client.get(
-                    data.lnurl_callback,
-                    params={"pr": payment.bolt11},
-                    timeout=10,
-                )
-                if r.is_error:
-                    payment.extra["lnurl_response"] = r.text
-                else:
-                    resp = json.loads(r.text)
-                    if resp["status"] != "OK":
-                        payment.extra["lnurl_response"] = resp["reason"]
-                    else:
-                        payment.extra["lnurl_response"] = True
-            except (httpx.ConnectError, httpx.RequestError) as ex:
-                logger.error(ex)
-                payment.extra["lnurl_response"] = False
-
-    return payment
 
 
 @payment_router.get(
@@ -308,6 +243,7 @@ async def api_payments_create(
     invoice_data: CreateInvoice,
     wallet: WalletTypeInfo = Depends(require_invoice_key),
 ) -> Payment:
+    wallet_id = wallet.wallet.id
     if invoice_data.out is True and wallet.key_type == KeyType.admin:
         if not invoice_data.bolt11:
             raise HTTPException(
@@ -315,20 +251,23 @@ async def api_payments_create(
                 detail="Missing BOLT11 invoice",
             )
         payment = await pay_invoice(
-            wallet_id=wallet.wallet.id,
+            wallet_id=wallet_id,
             payment_request=invoice_data.bolt11,
             extra=invoice_data.extra,
         )
         return payment
 
-    elif not invoice_data.out:
-        # invoice key
-        return await _api_payments_create_invoice(invoice_data, wallet.wallet)
-    else:
+    if invoice_data.out:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail="Invoice (or Admin) key required.",
         )
+
+    # If the payment is not outgoing, we can create a new invoice.
+    if invoice_data.fiat_provider:
+        return await create_fiat_invoice(wallet_id, invoice_data)
+
+    return await create_wallet_invoice(wallet_id, invoice_data)
 
 
 @payment_router.get("/fee-reserve")
@@ -439,6 +378,9 @@ async def api_payment(payment_hash, x_api_key: Optional[str] = Header(None)):
         if wallet and wallet.id == payment.wallet_id:
             return {"paid": True, "preimage": payment.preimage, "details": payment}
         return {"paid": True, "preimage": payment.preimage}
+
+    if payment.failed:
+        return {"paid": False, "status": "failed", "details": payment}
 
     try:
         status = await payment.check_status()
