@@ -14,6 +14,7 @@ from lnbits.core.crud import (
     delete_account,
     delete_wallet,
     force_delete_wallet,
+    get_account,
     get_accounts,
     get_user,
     get_wallet,
@@ -41,7 +42,7 @@ from lnbits.core.services import (
     update_wallet_balance,
 )
 from lnbits.db import Filters, Page
-from lnbits.decorators import check_admin, check_super_user, parse_filters
+from lnbits.decorators import check_admin, check_super_user, check_user_exists, parse_filters
 from lnbits.helpers import (
     encrypt_internal_message,
     generate_filter_params_openapi,
@@ -342,7 +343,7 @@ async def api_update_balance(data: UpdateBalance) -> SimpleStatus:
     "/nostr/pubkeys",
     name="Get all user Nostr public keys",
     summary="Get a list of all user Nostr public keys",
-    dependencies=[Depends(check_admin)],
+    dependencies=[],  # Override global admin requirement
 )
 async def api_get_nostr_pubkeys() -> list[dict[str, str]]:
     """Get all user Nostr public keys"""
@@ -363,3 +364,27 @@ async def api_get_nostr_pubkeys() -> list[dict[str, str]]:
             })
     
     return pubkeys
+
+
+@users_router.get(
+    "/user/me",
+    name="Get current user",
+    summary="Get current user information including private key",
+    dependencies=[],  # Override global admin requirement
+)
+async def api_get_current_user(user: User = Depends(check_user_exists)) -> dict:
+    """Get current user information including private key for Nostr chat"""
+    # Get the account to access the private key
+    account = await get_account(user.id)
+    if not account:
+        raise HTTPException(HTTPStatus.NOT_FOUND, "User not found.")
+    
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "pubkey": user.pubkey,
+        "prvkey": account.prvkey,  # Include private key for Nostr chat
+        "created_at": user.created_at,
+        "updated_at": user.updated_at
+    }
