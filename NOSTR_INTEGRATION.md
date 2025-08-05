@@ -18,13 +18,12 @@ The integration adds Nostr keypair generation to user accounts, allowing each us
 
 **File**: `lnbits/core/models/users.py`
 - Added `nostr_private_key` field to `Account` model
-- Added `nostr_public_key` field to `User` model
 - The existing `pubkey` field is now used to store the Nostr public key
 
 ### 3. CRUD Operations
 
 **File**: `lnbits/core/crud/users.py`
-- Updated `get_user_from_account()` to use the pubkey field as the Nostr public key
+- Updated `get_user_from_account()` to use the existing pubkey field (now contains Nostr public key)
 - Updated `get_accounts()` SQL query to include `nostr_private_key` field
 
 ### 4. API Endpoints
@@ -96,7 +95,7 @@ Response:
   "id": "abc123",
   "username": "user1",
   "email": "user1@example.com",
-  "nostr_public_key": "02a1b2c3d4e5f6...",
+  "pubkey": "02a1b2c3d4e5f6...",  # This is the Nostr public key
   "created_at": "2024-01-01T00:00:00Z",
   "updated_at": "2024-01-01T00:00:00Z",
   ...

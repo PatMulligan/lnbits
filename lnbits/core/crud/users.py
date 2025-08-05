@@ -189,7 +189,6 @@ async def get_user_from_account(
         email=account.email,
         username=account.username,
         pubkey=account.pubkey,  # This is now the Nostr public key
-        nostr_public_key=account.pubkey,  # Same as pubkey for consistency
         external_id=account.external_id,
         extra=account.extra,
         created_at=account.created_at,

@@ -188,8 +188,7 @@ class User(BaseModel):
     updated_at: datetime
     email: str | None = None
     username: str | None = None
-    pubkey: str | None = None
-    nostr_public_key: str | None = None  # Nostr public key for user
+    pubkey: str | None = None  # This is now the Nostr public key
     external_id: str | None = None  # for external account linking
     extensions: list[str] = []
     wallets: list[Wallet] = []
