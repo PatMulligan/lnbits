@@ -68,7 +68,7 @@ async def get_accounts(
             accounts.username,
             accounts.email,
             accounts.pubkey,
-            accounts.nostr_private_key,
+            accounts.prvkey,
             accounts.external_id,
             SUM(COALESCE((
                 SELECT balance FROM balances WHERE wallet_id = wallets.id

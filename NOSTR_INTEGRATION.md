@@ -12,19 +12,19 @@ The integration adds Nostr keypair generation to user accounts, allowing each us
 
 **File**: `lnbits/core/migrations.py`
 - Added `m034_add_nostr_private_key_to_accounts()` migration
-- Adds `nostr_private_key` column to the `accounts` table
+- Adds `prvkey` column to the `accounts` table
 
 ### 2. Model Updates
 
 **File**: `lnbits/core/models/users.py`
-- Added `nostr_private_key` field to `Account` model
+- Added `prvkey` field to `Account` model for Nostr private key
 - The existing `pubkey` field is now used to store the Nostr public key
 
 ### 3. CRUD Operations
 
 **File**: `lnbits/core/crud/users.py`
 - Updated `get_user_from_account()` to use the existing pubkey field (now contains Nostr public key)
-- Updated `get_accounts()` SQL query to include `nostr_private_key` field
+- Updated `get_accounts()` SQL query to include `prvkey` field
 
 ### 4. API Endpoints
 
@@ -75,12 +75,12 @@ Response:
   {
     "user_id": "abc123",
     "username": "user1",
-    "nostr_public_key": "02a1b2c3d4e5f6..."
+    "pubkey": "02a1b2c3d4e5f6..."
   },
   {
     "user_id": "def456", 
     "username": "user2",
-    "nostr_public_key": "03b2c3d4e5f6a1..."
+    "pubkey": "03b2c3d4e5f6a1..."
   }
 ]
 ```
@@ -104,10 +104,10 @@ Response:
 
 ## Security Considerations
 
-1. **Private Key Storage**: Nostr private keys are stored in the database but are never exposed through the API
-2. **Public Key Storage**: Nostr public keys are stored directly in the pubkey field for efficiency
+1. **Private Key Storage**: Nostr private keys are stored in the `prvkey` field but are never exposed through the API
+2. **Public Key Storage**: Nostr public keys are stored directly in the `pubkey` field for efficiency
 3. **Admin Access**: The public key listing endpoint requires admin privileges
-4. **Simple Access**: Public keys are easily accessible through the existing pubkey field
+4. **Consistent Naming**: `pubkey` and `prvkey` provide clear, consistent field names
 
 ## Migration
 

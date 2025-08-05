@@ -102,7 +102,7 @@ class Account(BaseModel):
     username: str | None = None
     password_hash: str | None = None
     pubkey: str | None = None
-    nostr_private_key: str | None = None  # Nostr private key for user
+    prvkey: str | None = None  # Nostr private key for user
     email: str | None = None
     extra: UserExtra = UserExtra()
 

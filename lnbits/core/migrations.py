@@ -728,9 +728,9 @@ async def m033_update_payment_table(db: Connection):
 
 async def m034_add_nostr_private_key_to_accounts(db: Connection):
     """
-    Adds nostr_private_key column to accounts for storing Nostr private keys.
+    Adds prvkey column to accounts for storing Nostr private keys.
     """
     try:
-        await db.execute("ALTER TABLE accounts ADD COLUMN nostr_private_key TEXT")
+        await db.execute("ALTER TABLE accounts ADD COLUMN prvkey TEXT")
     except OperationalError:
         pass

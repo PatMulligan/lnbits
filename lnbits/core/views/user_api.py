@@ -104,7 +104,7 @@ async def api_create_user(data: CreateUser) -> CreateUser:
         username=data.username,
         email=data.email,
         pubkey=nostr_public_key,  # Use Nostr public key as the pubkey
-        nostr_private_key=nostr_private_key,
+        prvkey=nostr_private_key,
         external_id=data.external_id,
         extra=data.extra,
     )
@@ -359,7 +359,7 @@ async def api_get_nostr_pubkeys() -> list[dict[str, str]]:
             pubkeys.append({
                 "user_id": account.id,
                 "username": account.username,
-                "nostr_public_key": account.pubkey
+                "pubkey": account.pubkey  # Use consistent naming
             })
     
     return pubkeys

@@ -299,7 +299,7 @@ async def create_user(username: str, password: str):
         id=uuid4().hex,
         username=username,
         pubkey=nostr_public_key,  # Use Nostr public key as the pubkey
-        nostr_private_key=nostr_private_key,
+        prvkey=nostr_private_key,
     )
     account.hash_password(password)
     user = await create_user_account_no_ckeck(account)
