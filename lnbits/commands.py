@@ -291,13 +291,20 @@ async def check_invalid_payments(
 @coro
 async def create_user(username: str, password: str):
     """Create a new user bypassing the system 'new_accounts_allowed' rules"""
+    # Generate Nostr keypair for new user
+    from lnbits.utils.nostr import generate_keypair
+    nostr_private_key, nostr_public_key = generate_keypair()
+    
     account = Account(
         id=uuid4().hex,
         username=username,
+        pubkey=nostr_public_key,  # Use Nostr public key as the pubkey
+        nostr_private_key=nostr_private_key,
     )
     account.hash_password(password)
     user = await create_user_account_no_ckeck(account)
     click.echo(f"User '{user.username}' created. Id: '{user.id}'")
+    click.echo(f"Nostr public key: {nostr_public_key}")
 
 
 @users.command("cleanup-accounts")

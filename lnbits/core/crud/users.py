@@ -68,6 +68,7 @@ async def get_accounts(
             accounts.username,
             accounts.email,
             accounts.pubkey,
+            accounts.nostr_private_key,
             accounts.external_id,
             SUM(COALESCE((
                 SELECT balance FROM balances WHERE wallet_id = wallets.id
@@ -182,11 +183,13 @@ async def get_user_from_account(
 ) -> Optional[User]:
     extensions = await get_user_active_extensions_ids(account.id, conn)
     wallets = await get_wallets(account.id, False, conn=conn)
+    
     return User(
         id=account.id,
         email=account.email,
         username=account.username,
-        pubkey=account.pubkey,
+        pubkey=account.pubkey,  # This is now the Nostr public key
+        nostr_public_key=account.pubkey,  # Same as pubkey for consistency
         external_id=account.external_id,
         extra=account.extra,
         created_at=account.created_at,

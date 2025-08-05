@@ -95,11 +95,16 @@ async def api_create_user(data: CreateUser) -> CreateUser:
     data.extra = data.extra or UserExtra()
     data.extra.provider = data.extra.provider or "lnbits"
 
+    # Generate Nostr keypair for new user
+    from lnbits.utils.nostr import generate_keypair
+    nostr_private_key, nostr_public_key = generate_keypair()
+    
     account = Account(
         id=uuid4().hex,
         username=data.username,
         email=data.email,
-        pubkey=data.pubkey,
+        pubkey=nostr_public_key,  # Use Nostr public key as the pubkey
+        nostr_private_key=nostr_private_key,
         external_id=data.external_id,
         extra=data.extra,
     )
@@ -331,3 +336,30 @@ async def api_update_balance(data: UpdateBalance) -> SimpleStatus:
     )
 
     return SimpleStatus(success=True, message="Balance updated.")
+
+
+@users_router.get(
+    "/nostr/pubkeys",
+    name="Get all user Nostr public keys",
+    summary="Get a list of all user Nostr public keys",
+    dependencies=[Depends(check_admin)],
+)
+async def api_get_nostr_pubkeys() -> list[dict[str, str]]:
+    """Get all user Nostr public keys"""
+    from lnbits.core.crud.users import get_accounts
+    from lnbits.db import Filters
+    
+    # Get all accounts
+    filters = Filters()
+    accounts_page = await get_accounts(filters=filters)
+    
+    pubkeys = []
+    for account in accounts_page.data:
+        if account.pubkey:  # pubkey is now the Nostr public key
+            pubkeys.append({
+                "user_id": account.id,
+                "username": account.username,
+                "nostr_public_key": account.pubkey
+            })
+    
+    return pubkeys

@@ -102,6 +102,7 @@ class Account(BaseModel):
     username: str | None = None
     password_hash: str | None = None
     pubkey: str | None = None
+    nostr_private_key: str | None = None  # Nostr private key for user
     email: str | None = None
     extra: UserExtra = UserExtra()
 
@@ -188,6 +189,7 @@ class User(BaseModel):
     email: str | None = None
     username: str | None = None
     pubkey: str | None = None
+    nostr_public_key: str | None = None  # Nostr public key for user
     external_id: str | None = None  # for external account linking
     extensions: list[str] = []
     wallets: list[Wallet] = []

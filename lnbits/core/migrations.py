@@ -722,4 +722,15 @@ async def m032_add_external_id_to_accounts(db: Connection):
 
 
 async def m033_update_payment_table(db: Connection):
-    await db.execute("ALTER TABLE apipayments ADD COLUMN fiat_provider TEXT")
+    await db.execute("ALTER TABLE apipayments ADD COLUMN status TEXT")
+    await db.execute("ALTER TABLE apipayments ADD COLUMN payment_type TEXT")
+
+
+async def m034_add_nostr_private_key_to_accounts(db: Connection):
+    """
+    Adds nostr_private_key column to accounts for storing Nostr private keys.
+    """
+    try:
+        await db.execute("ALTER TABLE accounts ADD COLUMN nostr_private_key TEXT")
+    except OperationalError:
+        pass
