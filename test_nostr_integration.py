@@ -23,33 +23,33 @@ def test_nostr_keypair_generation():
         return False
 
 def test_account_model():
-    """Test that the Account model includes nostr_private_key field"""
+    """Test that the Account model includes prvkey field"""
     try:
         from lnbits.core.models.users import Account
         account = Account(
             id="test123",
             username="testuser",
-            nostr_private_key="test_private_key"
         )
-        print(f"✓ Account model includes nostr_private_key field")
-        print(f"  nostr_private_key: {account.nostr_private_key}")
+        print(f"✓ Account model includes prvkey field")
+        print(f"  prvkey: {account.prvkey}")
+        print(f"  pubkey: {account.pubkey}")
         return True
     except Exception as e:
         print(f"✗ Account model test failed: {e}")
         return False
 
 def test_user_model():
-    """Test that the User model includes nostr_public_key field"""
+    """Test that the User model includes pubkey field"""
     try:
         from lnbits.core.models.users import User
         user = User(
             id="test123",
             created_at=None,
             updated_at=None,
-            nostr_public_key="test_public_key"
+            pubkey="test_public_key"
         )
-        print(f"✓ User model includes nostr_public_key field")
-        print(f"  nostr_public_key: {user.nostr_public_key}")
+        print(f"✓ User model includes pubkey field")
+        print(f"  pubkey: {user.pubkey}")
         return True
     except Exception as e:
         print(f"✗ User model test failed: {e}")

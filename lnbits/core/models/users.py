@@ -115,6 +115,19 @@ class Account(BaseModel):
 
     def __init__(self, **data):
         super().__init__(**data)
+        # NOTE: I tried this in the past and it resulted in unexpected behavior
+        # all accounts were suddenly showing up in the peers list, however, if
+        # they did not have a key-pair, they were being assigned one on the fly.
+        # Something about fetching the users was causing this code to trigger.
+        #
+        #
+        # # Generate Nostr keypair if not already provided
+        # if not self.pubkey or not self.prvkey:
+        #     from lnbits.utils.nostr import generate_keypair
+        #     nostr_public_key, nostr_private_key = generate_keypair()
+        #     self.pubkey = nostr_public_key
+        #     self.prvkey = nostr_private_key
+        #
         self.is_super_user = settings.is_super_user(self.id)
         self.is_admin = settings.is_admin_user(self.id)
         self.fiat_providers = settings.get_fiat_providers_for_user(self.id)

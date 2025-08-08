@@ -12,7 +12,7 @@ The integration adds Nostr keypair generation to user accounts, allowing each us
 
 **File**: `lnbits/core/migrations.py`
 - Added `m034_add_nostr_private_key_to_accounts()` migration
-- Adds `prvkey` column to the `accounts` table
+- Adds `prvkey` column to the `accounts` table for Nostr private keys
 
 ### 2. Model Updates
 
@@ -114,7 +114,7 @@ Response:
 To apply the database changes:
 
 1. Run the migration: `python -m lnbits db migrate`
-2. The migration will add the `nostr_private_key` column to existing accounts
+2. The migration will add the `prvkey` column to existing accounts for Nostr private keys
 3. New users will automatically get Nostr keypairs generated
 
 ## Testing

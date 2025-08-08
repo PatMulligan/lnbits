@@ -304,7 +304,7 @@ async def create_user(username: str, password: str):
     account.hash_password(password)
     user = await create_user_account_no_ckeck(account)
     click.echo(f"User '{user.username}' created. Id: '{user.id}'")
-    click.echo(f"Nostr public key: {nostr_public_key}")
+    click.echo(f"Nostr public key: {account.pubkey}")
 
 
 @users.command("cleanup-accounts")
