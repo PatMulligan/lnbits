@@ -23,9 +23,32 @@ async def create_account(
 ) -> Account:
     if account:
         account.validate_fields()
+        # If account doesn't have Nostr keys, generate them
+        # Exception: Nostr login users who already have a public key but no private key
+        # should not get a new private key generated - they use their existing Nostr identity
+        if not account.pubkey and not account.prvkey:
+            from lnbits.utils.nostr import generate_keypair
+            nostr_private_key, nostr_public_key = generate_keypair()
+            account.pubkey = nostr_public_key
+            account.prvkey = nostr_private_key
+        elif account.pubkey and not account.prvkey:
+            # This is a Nostr login user - they already have a public key from their existing identity
+            # We don't generate a private key for them as they use their own Nostr client
+            # The chat system will need to handle this case by requesting the private key from the user
+            pass
     else:
+        # Generate Nostr keypair for new account
+        from lnbits.utils.nostr import generate_keypair
+        nostr_private_key, nostr_public_key = generate_keypair()
+        
         now = datetime.now(timezone.utc)
-        account = Account(id=uuid4().hex, created_at=now, updated_at=now)
+        account = Account(
+            id=uuid4().hex, 
+            created_at=now, 
+            updated_at=now,
+            pubkey=nostr_public_key,  # Use Nostr public key as the pubkey
+            prvkey=nostr_private_key,
+        )
     await (conn or db).insert("accounts", account)
     return account
 

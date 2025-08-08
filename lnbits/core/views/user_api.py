@@ -96,16 +96,10 @@ async def api_create_user(data: CreateUser) -> CreateUser:
     data.extra = data.extra or UserExtra()
     data.extra.provider = data.extra.provider or "lnbits"
 
-    # Generate Nostr keypair for new user
-    from lnbits.utils.nostr import generate_keypair
-    nostr_private_key, nostr_public_key = generate_keypair()
-    
     account = Account(
         id=uuid4().hex,
         username=data.username,
         email=data.email,
-        pubkey=nostr_public_key,  # Use Nostr public key as the pubkey
-        prvkey=nostr_private_key,
         external_id=data.external_id,
         extra=data.extra,
     )
