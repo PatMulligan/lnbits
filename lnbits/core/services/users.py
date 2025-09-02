@@ -22,6 +22,7 @@ from ..crud import (
     get_super_settings,
     get_user_extensions,
     get_user_from_account,
+    get_wallet,
     update_account,
     update_super_user,
     update_user_extension,
@@ -33,6 +34,7 @@ from ..models import (
     UserExtra,
 )
 from .settings import update_cached_settings
+from .payments import update_wallet_balance
 
 
 async def create_user_account(
@@ -65,10 +67,17 @@ async def create_user_account_no_ckeck(
             account.id = uuid4().hex
 
     account = await create_account(account)
-    await create_wallet(
+    wallet = await create_wallet(
         user_id=account.id,
         wallet_name=wallet_name or settings.lnbits_default_wallet_name,
     )
+
+    # Credit new account with 1 million satoshis
+    try:
+        await update_wallet_balance(wallet, 1_000_000)
+        logger.info(f"Credited new account {account.id} with 1,000,000 sats")
+    except Exception as e:
+        logger.error(f"Failed to credit new account {account.id} with 1,000,000 sats: {e}")
 
     user_extensions = (default_exts or []) + settings.lnbits_user_default_extensions
     for ext_id in user_extensions:
