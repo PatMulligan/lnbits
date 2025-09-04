@@ -293,6 +293,10 @@ async def test_register_ok(http_client: AsyncClient):
     assert (
         len(user.wallets) == 1
     ), f"Expected 1 default wallet, not {len(user.wallets)}."
+    
+    # Check that the wallet has 1 million satoshis
+    wallet = user.wallets[0]
+    assert wallet.balance == 1_000_000, f"Expected 1,000,000 sats balance, got {wallet.balance} sats"
 
 
 @pytest.mark.anyio
@@ -586,6 +590,10 @@ async def test_register_nostr_ok(http_client: AsyncClient, settings: Settings):
     assert (
         len(user.wallets) == 1
     ), f"Expected 1 default wallet, not {len(user.wallets)}."
+    
+    # Check that the wallet has 1 million satoshis
+    wallet = user.wallets[0]
+    assert wallet.balance == 1_000_000, f"Expected 1,000,000 sats balance, got {wallet.balance} sats"
 
 
 @pytest.mark.anyio
