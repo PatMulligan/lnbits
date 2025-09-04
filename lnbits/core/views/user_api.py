@@ -13,6 +13,7 @@ from lnbits.core.crud import (
     delete_account,
     delete_wallet,
     force_delete_wallet,
+    get_account,
     get_accounts,
     get_user,
     get_wallet,
@@ -40,7 +41,7 @@ from lnbits.core.services import (
     update_wallet_balance,
 )
 from lnbits.db import Filters, Page
-from lnbits.decorators import check_admin, check_super_user, parse_filters
+from lnbits.decorators import check_admin, check_super_user, check_user_exists, parse_filters
 from lnbits.helpers import (
     encrypt_internal_message,
     generate_filter_params_openapi,
@@ -95,14 +96,10 @@ async def api_create_user(data: CreateUser) -> CreateUser:
     data.extra = data.extra or UserExtra()
     data.extra.provider = data.extra.provider or "lnbits"
 
-    if data.pubkey:
-        data.pubkey = normalize_public_key(data.pubkey)
-
     account = Account(
         id=uuid4().hex,
         username=data.username,
         email=data.email,
-        pubkey=data.pubkey,
         external_id=data.external_id,
         extra=data.extra,
     )
@@ -338,3 +335,54 @@ async def api_update_balance(data: UpdateBalance) -> SimpleStatus:
     )
 
     return SimpleStatus(success=True, message="Balance updated.")
+
+
+@users_router.get(
+    "/nostr/pubkeys",
+    name="Get all user Nostr public keys",
+    summary="Get a list of all user Nostr public keys",
+    dependencies=[],  # Override global admin requirement
+)
+async def api_get_nostr_pubkeys() -> list[dict[str, str]]:
+    """Get all user Nostr public keys"""
+    from lnbits.core.crud.users import get_accounts
+    from lnbits.db import Filters
+
+    # Get all accounts
+    filters = Filters()
+    accounts_page = await get_accounts(filters=filters)
+
+    pubkeys = []
+    for account in accounts_page.data:
+        if account.pubkey:  # pubkey is now the Nostr public key
+            pubkeys.append({
+                "user_id": account.id,
+                "username": account.username,
+                "pubkey": account.pubkey  # Use consistent naming
+            })
+
+    return pubkeys
+
+
+@users_router.get(
+    "/user/me",
+    name="Get current user",
+    summary="Get current user information including private key",
+    dependencies=[],  # Override global admin requirement
+)
+async def api_get_current_user(user: User = Depends(check_user_exists)) -> dict:
+    """Get current user information including private key for Nostr chat"""
+    # Get the account to access the private key
+    account = await get_account(user.id)
+    if not account:
+        raise HTTPException(HTTPStatus.NOT_FOUND, "User not found.")
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "pubkey": user.pubkey,
+        "prvkey": account.prvkey,  # Include private key for Nostr chat
+        "created_at": user.created_at,
+        "updated_at": user.updated_at
+    }

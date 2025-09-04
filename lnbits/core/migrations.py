@@ -239,13 +239,13 @@ async def m007_set_invoice_expiries(db: Connection):
 
                 expiration_date = invoice.date + invoice.expiry
                 logger.info(
-                    f"Migration: {i+1}/{len(rows)} setting expiry of invoice"
+                    f"Migration: {i + 1}/{len(rows)} setting expiry of invoice"
                     f" {invoice.payment_hash} to {expiration_date}"
                 )
                 await db.execute(
                     # Timestamp placeholder is safe from SQL injection (not user input)
                     f"""
-                    UPDATE apipayments SET expiry = {db.timestamp_placeholder('expiry')}
+                    UPDATE apipayments SET expiry = {db.timestamp_placeholder("expiry")}
                     WHERE checking_id = :checking_id AND amount > 0
                     """,  # noqa: S608
                     {"expiry": expiration_date, "checking_id": checking_id},
@@ -460,7 +460,7 @@ async def m017_add_timestamp_columns_to_accounts_and_wallets(db: Connection):
         await db.execute(
             # Timestamp placeholder is safe from SQL injection (not user input)
             f"""
-            UPDATE wallets SET created_at = {db.timestamp_placeholder('now')}
+            UPDATE wallets SET created_at = {db.timestamp_placeholder("now")}
             WHERE created_at IS NULL
             """,  # noqa: S608
             {"now": now},
@@ -468,7 +468,7 @@ async def m017_add_timestamp_columns_to_accounts_and_wallets(db: Connection):
         await db.execute(
             # Timestamp placeholder is safe from SQL injection (not user input)
             f"""
-            UPDATE accounts SET created_at = {db.timestamp_placeholder('now')}
+            UPDATE accounts SET created_at = {db.timestamp_placeholder("now")}
             WHERE created_at IS NULL
             """,  # noqa: S608
             {"now": now},
@@ -619,7 +619,7 @@ async def m027_update_apipayments_data(db: Connection):
     payments: list[dict[Any, Any]] = []
     logger.info("Updating payments")
     while len(payments) > 0 or offset == 0:
-        logger.info(f"Updating {offset} to {offset+limit}")
+        logger.info(f"Updating {offset} to {offset + limit}")
 
         result = await db.execute(
             # Limit and Offset safe from SQL injection
@@ -657,7 +657,6 @@ async def m027_update_apipayments_data(db: Connection):
 
 
 async def m028_update_settings(db: Connection):
-
     await db.execute(
         """
         CREATE TABLE IF NOT EXISTS system_settings (
@@ -743,3 +742,13 @@ async def m034_add_stored_paylinks_to_wallet(db: Connection):
         ALTER TABLE wallets ADD COLUMN stored_paylinks TEXT
         """
     )
+
+
+async def m035_add_nostr_private_key_to_accounts(db: Connection):
+    """
+    Adds prvkey column to accounts for storing Nostr private keys.
+    """
+    try:
+        await db.execute("ALTER TABLE accounts ADD COLUMN prvkey TEXT")
+    except OperationalError:
+        pass

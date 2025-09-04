@@ -70,6 +70,49 @@ async def get_auth_user(user: User = Depends(check_user_exists)) -> User:
     return user
 
 
+@auth_router.get("/nostr/me", description="Get current user with Nostr keys")
+async def get_auth_user_with_nostr(user: User = Depends(check_user_exists)) -> dict:
+    """Get current user information including Nostr private key for chat"""
+    from lnbits.core.crud.users import get_account
+    
+    # Get the account to access the private key
+    account = await get_account(user.id)
+    if not account:
+        raise HTTPException(HTTPStatus.NOT_FOUND, "User not found.")
+    
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "pubkey": user.pubkey,
+        "prvkey": account.prvkey,  # Include private key for Nostr chat
+        "created_at": user.created_at,
+        "updated_at": user.updated_at
+    }
+
+
+@auth_router.get("/nostr/pubkeys", description="Get all user Nostr public keys")
+async def get_nostr_pubkeys(user: User = Depends(check_user_exists)) -> list[dict[str, str]]:
+    """Get all user Nostr public keys for chat"""
+    from lnbits.core.crud.users import get_accounts
+    from lnbits.db import Filters
+    
+    # Get all accounts
+    filters = Filters()
+    accounts_page = await get_accounts(filters=filters)
+    
+    pubkeys = []
+    for account in accounts_page.data:
+        if account.pubkey:  # pubkey is now the Nostr public key
+            pubkeys.append({
+                "user_id": account.id,
+                "username": account.username,
+                "pubkey": account.pubkey
+            })
+    
+    return pubkeys
+
+
 @auth_router.post("", description="Login via the username and password")
 async def login(data: LoginUsernamePassword) -> JSONResponse:
     if not settings.is_auth_method_allowed(AuthMethods.username_and_password):
