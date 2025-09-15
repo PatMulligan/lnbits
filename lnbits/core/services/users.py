@@ -78,6 +78,14 @@ async def create_user_account_no_ckeck(
         except Exception as e:
             logger.error(f"Error enabeling default extension {ext_id}: {e}")
 
+    # Create default pay link for users with username
+    if account.username and "lnurlp" in user_extensions:
+        try:
+            await _create_default_pay_link(account, wallet)
+            logger.info(f"Created default pay link for user {account.username}")
+        except Exception as e:
+            logger.error(f"Failed to create default pay link for user {account.username}: {e}")
+
     user = await get_user_from_account(account)
     if not user:
         raise ValueError("Cannot find user for account.")
@@ -184,3 +192,31 @@ async def init_admin_settings(super_user: str | None = None) -> SuperSettings:
 
     editable_settings = EditableSettings.from_dict(settings.dict())
     return await create_admin_settings(account.id, editable_settings.dict())
+
+
+async def _create_default_pay_link(account: Account, wallet) -> None:
+    """Create a default pay link for new users with username (Bitcoinmat receiving address)"""
+    try:
+        # Import here to avoid circular imports
+        from lnbits.extensions.lnurlp.crud import create_pay_link
+        from lnbits.extensions.lnurlp.models import CreatePayLinkData
+        
+        pay_link_data = CreatePayLinkData(
+            description="Bitcoinmat Receiving Address",
+            wallet=wallet.id,
+            min=1,  # minimum 1 sat
+            max=500000,  # maximum 500,000 sats
+            comment_chars=0,
+            currency="sat",  # use default satoshis
+            username=account.username,  # use the username as lightning address
+            zaps=True,
+            disposable=False,
+        )
+        
+        await create_pay_link(pay_link_data)
+        
+    except ImportError as e:
+        logger.warning(f"lnurlp extension not available for creating default pay link: {e}")
+    except Exception as e:
+        logger.error(f"Failed to create default pay link: {e}")
+        raise

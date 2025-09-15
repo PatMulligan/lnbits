@@ -94,7 +94,7 @@ window.LNbits = {
       return axios({
         method: 'POST',
         url: '/api/v1/auth',
-        data: {username, password}
+        data: { username, password }
       })
     },
     loginByProvider(provider, headers, data) {
@@ -109,7 +109,7 @@ window.LNbits = {
       return axios({
         method: 'POST',
         url: '/api/v1/auth/usr',
-        data: {usr}
+        data: { usr }
       })
     },
     logout() {
@@ -172,7 +172,7 @@ window.LNbits = {
     },
     getCurrencies() {
       return this.request('GET', '/api/v1/currencies').then(response => {
-        return ['sats', ...response.data]
+        return ['sat', ...response.data]
       })
     }
   },
@@ -190,7 +190,7 @@ window.LNbits = {
   },
   map: {
     extension(data) {
-      const obj = {...data}
+      const obj = { ...data }
       obj.url = ['/', obj.code, '/'].join('')
       return obj
     },
@@ -283,7 +283,7 @@ window.LNbits = {
       try {
         obj.details = JSON.parse(data.extra?.details || '{}')
       } catch {
-        obj.details = {extraDetails: data.extra?.details}
+        obj.details = { extraDetails: data.extra?.details }
       }
       return obj
     }
@@ -470,7 +470,7 @@ window.windowMixin = {
       toggleSubs: true,
       mobileSimple: true,
       walletFlip: true,
-      showAddWalletDialog: {show: false},
+      showAddWalletDialog: { show: false },
       isUserAuthorized: false,
       isSatsDenomination: WINDOW_SETTINGS['LNBITS_DENOMINATION'] == 'sats',
       allowedThemes: WINDOW_SETTINGS['LNBITS_THEME_OPTIONS'],
@@ -519,7 +519,7 @@ window.windowMixin = {
           this.g.user.wallets[0],
           this.showAddWalletDialog.name
         )
-        this.showAddWalletDialog = {show: false}
+        this.showAddWalletDialog = { show: false }
       } else {
         this.$q.notify({
           message: 'Please enter a name for the wallet',
@@ -580,12 +580,12 @@ window.windowMixin = {
       if (currentPath !== '/wallet') {
         this.$router.push({
           path: '/wallet',
-          query: {wal: this.g.wallet.id}
+          query: { wal: this.g.wallet.id }
         })
       } else {
         this.$router.replace({
           path: '/wallet',
-          query: {wal: this.g.wallet.id}
+          query: { wal: this.g.wallet.id }
         })
       }
     },
@@ -684,7 +684,7 @@ window.windowMixin = {
       LNbits.utils
         .confirmDialog(
           'Do you really want to logout?' +
-            ' Please visit "My Account" page to check your credentials!'
+          ' Please visit "My Account" page to check your credentials!'
         )
         .onOk(async () => {
           try {
@@ -745,7 +745,7 @@ window.windowMixin = {
       console.log(path)
 
       this.$router.push('/temp').then(() => {
-        this.$router.replace({path})
+        this.$router.replace({ path })
       })
     }
   },
@@ -811,7 +811,7 @@ window.decryptLnurlPayAES = (success_action, preimage) => {
   )
 
   return crypto.subtle
-    .importKey('raw', keyb, {name: 'AES-CBC', length: 256}, false, ['decrypt'])
+    .importKey('raw', keyb, { name: 'AES-CBC', length: 256 }, false, ['decrypt'])
     .then(key => {
       let ivb = Uint8Array.from(window.atob(success_action.iv), c =>
         c.charCodeAt(0)
@@ -821,7 +821,7 @@ window.decryptLnurlPayAES = (success_action, preimage) => {
         c => c.charCodeAt(0)
       )
 
-      return crypto.subtle.decrypt({name: 'AES-CBC', iv: ivb}, key, ciphertextb)
+      return crypto.subtle.decrypt({ name: 'AES-CBC', iv: ivb }, key, ciphertextb)
     })
     .then(valueb => {
       let decoder = new TextDecoder('utf-8')
