@@ -28,3 +28,11 @@ repos:
       - id: prettier
         types_or: [css, javascript, html, json]
         args: ['lnbits']
+  - repo: local
+    hooks:
+      - id: quasar-umd-linter
+        name: Quasar UMD Linter
+        entry: node tools/lint-quasar-umd.js
+        language: system
+        files: extensions/.*\.html$
+        pass_filenames: false
