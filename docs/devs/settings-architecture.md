@@ -1,3 +1,10 @@
+---
+layout: default
+title: Settings Architecture
+parent: For developers
+nav_order: 6
+---
+
 # LNbits Settings Architecture
 
 ## Overview
