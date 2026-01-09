@@ -1,5 +1,7 @@
 from fastapi import APIRouter, FastAPI
 
+from lnbits.settings import settings
+
 from .db import core_app_extra, db
 from .views.admin_api import admin_router
 from .views.api import api_router
@@ -30,7 +32,9 @@ def init_core_routers(app: FastAPI):
     app.include_router(core_app)
     app.include_router(generic_router)
     app.include_router(auth_router)
-    app.include_router(admin_router)
+    # Only include admin API routes if admin_ui is enabled
+    if settings.lnbits_admin_ui:
+        app.include_router(admin_router)
     app.include_router(node_router)
     app.include_router(extension_router)
     app.include_router(extension_builder_router)

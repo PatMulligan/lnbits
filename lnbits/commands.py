@@ -15,7 +15,9 @@ from packaging import version
 
 from lnbits.core import db as core_db
 from lnbits.core.crud import (
+    create_admin_settings,
     delete_accounts_no_wallets,
+    delete_admin_settings,
     delete_unused_wallets,
     delete_wallet_by_id,
     delete_wallet_payment,
@@ -24,6 +26,7 @@ from lnbits.core.crud import (
     get_installed_extensions,
     get_payment,
     get_payments,
+    get_super_settings,
     remove_deleted_wallets,
     update_payment,
 )
@@ -39,7 +42,7 @@ from lnbits.core.views.extension_api import (
     api_install_extension,
     api_uninstall_extension,
 )
-from lnbits.settings import settings
+from lnbits.settings import EditableSettings, readonly_variables, settings
 from lnbits.utils.crypto import AESCipher
 from lnbits.wallets.base import Wallet
 from lnbits.wallets.macaroon import load_macaroon
@@ -95,6 +98,13 @@ def decrypt():
     """
 
 
+@lnbits_cli.group(name="settings")
+def settings_cmd():
+    """
+    Settings management commands
+    """
+
+
 def get_super_user() -> str | None:
     """Get the superuser"""
     superuser_file = Path(settings.lnbits_data_folder, ".super_user")
@@ -130,10 +140,178 @@ def superuser_url():
 @lnbits_cli.command("delete-settings")
 @coro
 async def delete_settings():
-    """Deletes the settings"""
+    """Deletes the settings (deprecated: use 'settings reset' instead)"""
 
     async with core_db.connect() as conn:
         await conn.execute("DELETE from system_settings")
+
+
+@settings_cmd.command("reset")
+@click.option(
+    "-y",
+    "--yes",
+    is_flag=True,
+    help="Skip confirmation prompt.",
+)
+@click.option(
+    "--reseed/--no-reseed",
+    default=True,
+    help="Re-seed database with current .env values after reset (default: yes).",
+)
+@coro
+async def settings_reset(yes: bool, reseed: bool):
+    """
+    Reset database settings and optionally re-seed from .env.
+
+    This command clears all settings from the database. If --reseed is enabled
+    (default), it will re-initialize the database with values from the current
+    .env file and environment variables.
+
+    Use this when you want to:
+    - Discard all changes made via the Admin UI
+    - Force a fresh start with current .env values
+    - Revert to environment-variable-only configuration (with --no-reseed)
+    """
+    settings_db = await get_super_settings()
+    if not settings_db:
+        click.echo("No database settings found. Nothing to reset.")
+        return
+
+    if not yes:
+        click.echo("This will delete all settings from the database.")
+        if reseed:
+            click.echo("Settings will be re-initialized from current .env values.")
+        else:
+            click.echo("Database will be empty - settings will come from .env only.")
+        if not click.confirm("Do you want to continue?"):
+            click.echo("Aborted.")
+            return
+
+    # Delete all settings except super_user (we'll re-create it if reseeding)
+    await delete_admin_settings()
+    click.echo("Database settings deleted.")
+
+    if reseed:
+        # Re-seed from current .env values
+        super_user = settings_db.super_user
+        editable_settings = EditableSettings.from_dict(settings.dict())
+        await create_admin_settings(super_user, editable_settings.dict())
+        click.echo(f"Database re-seeded with current .env values.")
+        click.echo(f"Super user: {super_user}")
+    else:
+        click.echo("Database is now empty. Settings will come from .env only.")
+        click.echo(
+            "Note: Set LNBITS_ADMIN_UI=true and restart to re-enable database settings."
+        )
+
+
+@settings_cmd.command("export")
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(),
+    help="Output file path (default: stdout).",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["env", "json"]),
+    default="env",
+    help="Output format (default: env).",
+)
+@coro
+async def settings_export(output: str | None, output_format: str):
+    """
+    Export database settings to .env or JSON format.
+
+    This command exports all editable settings currently stored in the database.
+    ReadOnly settings (host, port, database_url, etc.) are not included as they
+    can only be set via environment variables.
+
+    Examples:
+        lnbits-cli settings export > my-settings.env
+        lnbits-cli settings export -o backup.env
+        lnbits-cli settings export --format json -o settings.json
+    """
+    import json
+
+    settings_db = await get_super_settings()
+    if not settings_db:
+        click.echo("No database settings found.", err=True)
+        return
+
+    settings_dict = settings_db.dict()
+    # Remove super_user from export (it's sensitive and stored separately)
+    super_user = settings_dict.pop("super_user", None)
+
+    # Filter out None values and readonly settings
+    export_dict = {
+        k: v
+        for k, v in settings_dict.items()
+        if v is not None and k not in readonly_variables
+    }
+
+    if output_format == "json":
+        content = json.dumps(export_dict, indent=2, default=str)
+    else:
+        # .env format
+        lines = [
+            "# LNbits Settings Export",
+            f"# Exported from database",
+            f"# Super user ID: {super_user}",
+            "",
+        ]
+        for key, value in sorted(export_dict.items()):
+            env_key = key.upper()
+            if isinstance(value, bool):
+                env_value = "true" if value else "false"
+            elif isinstance(value, list):
+                env_value = json.dumps(value)
+            elif isinstance(value, dict):
+                env_value = json.dumps(value)
+            elif value is None:
+                continue
+            else:
+                env_value = str(value)
+                # Quote strings with special characters
+                if any(c in env_value for c in [" ", '"', "'", "\n", "="]):
+                    env_value = f'"{env_value}"'
+            lines.append(f"{env_key}={env_value}")
+        content = "\n".join(lines) + "\n"
+
+    if output:
+        with open(output, "w") as f:
+            f.write(content)
+        click.echo(f"Settings exported to {output}")
+    else:
+        click.echo(content)
+
+
+@settings_cmd.command("show")
+@coro
+async def settings_show():
+    """
+    Show current settings source and status.
+
+    Displays whether settings are coming from the database or .env file,
+    and shows key configuration values.
+    """
+    settings_db = await get_super_settings()
+
+    click.echo("=" * 60)
+    click.echo("LNbits Settings Status")
+    click.echo("=" * 60)
+
+    if settings_db:
+        click.echo(f"Settings source: DATABASE")
+        click.echo(f"Super user: {settings_db.super_user}")
+    else:
+        click.echo(f"Settings source: ENVIRONMENT VARIABLES (.env)")
+
+    click.echo(f"Admin UI enabled: {settings.lnbits_admin_ui}")
+    click.echo(f"Data folder: {settings.lnbits_data_folder}")
+    click.echo(f"Database URL: {settings.lnbits_database_url or 'SQLite (default)'}")
+    click.echo("=" * 60)
 
 
 @db.command("migrate")

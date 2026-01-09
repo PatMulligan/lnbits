@@ -11,7 +11,7 @@ from lnbits.settings import (
     settings,
 )
 
-from ..crud import update_admin_settings
+from ..crud import get_super_settings, update_admin_settings
 
 
 async def check_webpush_settings():
@@ -32,7 +32,9 @@ async def check_webpush_settings():
             "lnbits_webpush_pubkey": pubkey,
         }
         update_cached_settings(push_settings)
-        if settings.lnbits_admin_ui:
+        # Persist to DB if database settings exist (regardless of admin_ui flag)
+        settings_db = await get_super_settings()
+        if settings_db:
             await update_admin_settings(EditableSettings(**push_settings))
 
     logger.info("Initialized webpush settings with generated VAPID key pair.")

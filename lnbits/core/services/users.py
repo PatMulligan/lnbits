@@ -149,16 +149,15 @@ async def check_admin_settings():
     if settings.super_user:
         settings.super_user = to_valid_user_id(settings.super_user).hex
 
-    if settings.lnbits_admin_ui:
-        settings_db = await get_super_settings()
-        if not settings_db:
-            # create new settings if table is empty
-            logger.warning("Settings DB empty. Inserting default settings.")
-            settings_db = await init_admin_settings(settings.super_user)
-            logger.warning("Initialized settings from environment variables.")
+    # Always try to load settings from database if they exist
+    # The admin_ui flag only controls whether admin API endpoints are available,
+    # not whether database settings are used
+    settings_db = await get_super_settings()
 
+    if settings_db:
+        # DB has settings - always use them (regardless of admin_ui flag)
         if settings.super_user and settings.super_user != settings_db.super_user:
-            # .env super_user overwrites DB super_user
+            # .env super_user always takes precedence
             settings_db = await update_super_user(settings.super_user)
 
         update_cached_settings(settings_db.dict())
@@ -171,9 +170,41 @@ async def check_admin_settings():
         if account and account.extra and account.extra.provider == "env":
             settings.first_install = True
 
+        if settings.lnbits_admin_ui:
+            logger.success(
+                "✔️ Admin UI is enabled. Run `uv run lnbits-cli superuser` "
+                "to get the superuser."
+            )
+        else:
+            logger.info(
+                "ℹ️ Using database settings (Admin UI disabled). "
+                "Run `uv run lnbits-cli settings reset` to revert to .env settings."
+            )
+    elif settings.lnbits_admin_ui:
+        # DB is empty and admin_ui is enabled - seed from env vars
+        logger.warning("Settings DB empty. Inserting default settings.")
+        settings_db = await init_admin_settings(settings.super_user)
+        logger.warning("Initialized settings from environment variables.")
+
+        update_cached_settings(settings_db.dict())
+
+        with open(Path(settings.lnbits_data_folder) / ".super_user", "w") as file:
+            file.write(settings.super_user)
+
+        account = await get_account(settings.super_user)
+        if account and account.extra and account.extra.provider == "env":
+            settings.first_install = True
+
         logger.success(
-            "✔️ Admin UI is enabled. run `uv run lnbits-cli superuser` "
+            "✔️ Admin UI is enabled. Run `uv run lnbits-cli superuser` "
             "to get the superuser."
+        )
+    else:
+        # DB is empty and admin_ui is disabled - use .env only
+        logger.info(
+            "ℹ️ Admin UI is disabled and no database settings found. "
+            "Using environment variables only. "
+            "Set LNBITS_ADMIN_UI=true to enable database settings."
         )
 
 
