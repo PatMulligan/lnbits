@@ -42,7 +42,7 @@ async def test_amountless_invoice(to_wallet: Wallet):
         "73aym6ynrdl9nkzqnag49vt3sjjn8qdfq5cr6ha0vrdz5c5r3v4aghndly0hplmv"
         "6hjxepwp93cq398l3s"
     )
-    with pytest.raises(PaymentError, match="Amountless invoices not supported."):
+    with pytest.raises(PaymentError, match="Amount required for amountless invoices."):
         await pay_invoice(
             wallet_id=to_wallet.id,
             payment_request=zero_amount_invoice,

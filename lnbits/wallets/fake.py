@@ -19,6 +19,7 @@ from lnbits.settings import settings
 from lnbits.utils.crypto import fake_privkey
 
 from .base import (
+    Feature,
     InvoiceResponse,
     PaymentFailedStatus,
     PaymentPendingStatus,
@@ -31,6 +32,7 @@ from .base import (
 
 
 class FakeWallet(Wallet):
+    features = [Feature.amountless_invoice]
 
     def __init__(self) -> None:
         self.queue: asyncio.Queue = asyncio.Queue(0)
@@ -89,7 +91,7 @@ class FakeWallet(Wallet):
 
         bolt11 = Bolt11(
             currency="bc",
-            amount_msat=MilliSatoshi(amount * 1000),
+            amount_msat=MilliSatoshi(amount * 1000) if amount > 0 else None,
             date=int(datetime.now().timestamp()),
             tags=tags,
         )
@@ -103,11 +105,19 @@ class FakeWallet(Wallet):
             preimage=preimage.hex(),
         )
 
-    async def pay_invoice(self, bolt11: str, _: int) -> PaymentResponse:
+    async def pay_invoice(
+        self, bolt11: str, _: int, amount_msat: int | None = None
+    ) -> PaymentResponse:
         try:
             invoice = decode(bolt11)
         except Bolt11Exception as exc:
             return PaymentResponse(ok=False, error_message=str(exc))
+
+        # For amountless invoices, amount_msat must be provided
+        if not invoice.amount_msat and not amount_msat:
+            return PaymentResponse(
+                ok=False, error_message="Amount required for amountless invoice"
+            )
 
         if invoice.payment_hash in self.payment_secrets:
             await self.queue.put(invoice)

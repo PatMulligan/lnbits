@@ -165,7 +165,7 @@ class BlinkWallet(Wallet):
             )
 
     async def pay_invoice(
-        self, bolt11_invoice: str, fee_limit_msat: int
+        self, bolt11_invoice: str, fee_limit_msat: int, amount_msat: int | None = None
     ) -> PaymentResponse:
         # https://dev.blink.sv/api/btc-ln-send
         # Future: add check fee estimate is < fee_limit_msat before paying invoice

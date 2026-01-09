@@ -123,7 +123,9 @@ class BoltzWallet(Wallet):
             fee_msat=fee_msat,
         )
 
-    async def pay_invoice(self, bolt11: str, fee_limit_msat: int) -> PaymentResponse:
+    async def pay_invoice(
+        self, bolt11: str, fee_limit_msat: int, amount_msat: int | None = None
+    ) -> PaymentResponse:
 
         pair = boltzrpc_pb2.Pair(**{"from": boltzrpc_pb2.LBTC})
         try:

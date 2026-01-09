@@ -171,7 +171,7 @@ else:
                 return InvoiceResponse(ok=False, error_message=str(e))
 
         async def pay_invoice(
-            self, bolt11: str, fee_limit_msat: int
+            self, bolt11: str, fee_limit_msat: int, amount_msat: int | None = None
         ) -> PaymentResponse:
             invoice_data = bolt11_decode(bolt11)
 

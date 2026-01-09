@@ -292,6 +292,15 @@ class CreateInvoice(BaseModel):
     lnurl_withdraw: LnurlWithdrawResponse | None = None
     fiat_provider: str | None = None
     labels: list[str] = []
+    # For paying amountless invoices (out=true only)
+    amount_msat: int | None = Query(
+        None,
+        ge=1,
+        description=(
+            "Amount to pay in millisatoshis. Required for amountless invoices "
+            "when the funding source supports them."
+        ),
+    )
 
     @validator("payment_hash")
     def check_hex(cls, v):

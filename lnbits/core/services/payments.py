@@ -24,6 +24,7 @@ from lnbits.utils.crypto import fake_privkey, random_secret_and_hash, verify_pre
 from lnbits.utils.exchange_rates import fiat_amount_as_satoshis, satoshis_amount_as_fiat
 from lnbits.wallets import fake_wallet, get_funding_source
 from lnbits.wallets.base import (
+    Feature,
     InvoiceResponse,
     PaymentPendingStatus,
     PaymentResponse,
@@ -63,17 +64,44 @@ async def pay_invoice(
     tag: str = "",
     labels: list[str] | None = None,
     conn: Connection | None = None,
+    amount_msat: int | None = None,
 ) -> Payment:
+    """
+    Pay a BOLT11 invoice.
+
+    Args:
+        wallet_id: The wallet to pay from
+        payment_request: The BOLT11 invoice string
+        max_sat: Maximum amount allowed in satoshis
+        extra: Extra metadata to store with the payment
+        description: Payment description/memo
+        tag: Payment tag (usually extension name)
+        labels: Payment labels
+        conn: Optional database connection to reuse
+        amount_msat: Amount to pay in millisatoshis. Required for amountless
+            invoices when the funding source supports Feature.amountless_invoice.
+
+    Returns:
+        The created Payment object
+    """
     if settings.lnbits_only_allow_incoming_payments:
         raise PaymentError("Only incoming payments allowed.", status="failed")
-    invoice = _validate_payment_request(payment_request, max_sat)
+    invoice = _validate_payment_request(payment_request, max_sat, amount_msat)
 
-    if not invoice.amount_msat:
-        raise ValueError("Missig invoice amount.")
+    # Determine the actual amount to pay
+    # For amountless invoices, use the provided amount_msat
+    pay_amount_msat = invoice.amount_msat or amount_msat
+    if not pay_amount_msat:
+        raise ValueError("Missing invoice amount.")
+
+    # For amountless invoices, we need to pass the amount to the funding source
+    # Only pass amount if the invoice is amountless
+    amountless_amount_msat = amount_msat if not invoice.amount_msat else None
 
     async with db.reuse_conn(conn) if conn else db.connect() as new_conn:
-        amount_msat = invoice.amount_msat
-        wallet = await _check_wallet_for_payment(wallet_id, tag, amount_msat, new_conn)
+        wallet = await _check_wallet_for_payment(
+            wallet_id, tag, pay_amount_msat, new_conn
+        )
 
         if not wallet.can_send_payments:
             raise PaymentError(
@@ -84,13 +112,15 @@ async def pay_invoice(
         if await is_internal_status_success(invoice.payment_hash, new_conn):
             raise PaymentError("Internal invoice already paid.", status="failed")
 
-        _, extra = await calculate_fiat_amounts(amount_msat / 1000, wallet, extra=extra)
+        _, extra = await calculate_fiat_amounts(
+            pay_amount_msat / 1000, wallet, extra=extra
+        )
 
         create_payment_model = CreatePayment(
             wallet_id=wallet.source_wallet_id,
             bolt11=payment_request,
             payment_hash=invoice.payment_hash,
-            amount_msat=-amount_msat,
+            amount_msat=-pay_amount_msat,
             expiry=invoice.expiry_date,
             memo=description or invoice.description or "",
             extra=extra,
@@ -99,7 +129,10 @@ async def pay_invoice(
 
     async with db.reuse_conn(conn) if conn else db.connect() as new_conn:
         payment = await _pay_invoice(
-            wallet.source_wallet_id, create_payment_model, conn=new_conn
+            wallet.source_wallet_id,
+            create_payment_model,
+            amountless_amount_msat=amountless_amount_msat,
+            conn=new_conn,
         )
 
         await _credit_service_fee_wallet(wallet, payment, conn=new_conn)
@@ -672,6 +705,7 @@ async def get_payments_daily_stats(
 async def _pay_invoice(
     wallet_id: str,
     create_payment_model: CreatePayment,
+    amountless_amount_msat: int | None = None,
     conn: Connection | None = None,
 ):
     async with payment_lock:
@@ -688,7 +722,9 @@ async def _pay_invoice(
 
         payment = await _pay_internal_invoice(wallet, create_payment_model, conn)
         if not payment:
-            payment = await _pay_external_invoice(wallet, create_payment_model, conn)
+            payment = await _pay_external_invoice(
+                wallet, create_payment_model, amountless_amount_msat, conn
+            )
         return payment
 
 
@@ -766,6 +802,7 @@ async def _pay_internal_invoice(
 async def _pay_external_invoice(
     wallet: Wallet,
     create_payment_model: CreatePayment,
+    amountless_amount_msat: int | None = None,
     conn: Connection | None = None,
 ) -> Payment:
     checking_id = create_payment_model.payment_hash
@@ -796,7 +833,9 @@ async def _pay_external_invoice(
     fee_reserve_msat = fee_reserve(amount_msat, internal=False)
 
     task = create_task(
-        _fundingsource_pay_invoice(checking_id, payment.bolt11, fee_reserve_msat)
+        _fundingsource_pay_invoice(
+            checking_id, payment.bolt11, fee_reserve_msat, amountless_amount_msat
+        )
     )
 
     # make sure a hold invoice or deferred payment is not blocking the server
@@ -847,12 +886,15 @@ async def update_payment_success_status(
 
 
 async def _fundingsource_pay_invoice(
-    checking_id: str, bolt11: str, fee_reserve_msat: int
+    checking_id: str,
+    bolt11: str,
+    fee_reserve_msat: int,
+    amountless_amount_msat: int | None = None,
 ) -> PaymentResponse:
     logger.debug(f"fundingsource: sending payment {checking_id}")
     funding_source = get_funding_source()
     payment_response: PaymentResponse = await funding_source.pay_invoice(
-        bolt11, fee_reserve_msat
+        bolt11, fee_reserve_msat, amountless_amount_msat
     )
     logger.debug(f"backend: pay_invoice finished {checking_id}, {payment_response}")
     return payment_response
@@ -906,21 +948,48 @@ async def _check_wallet_for_payment(
 
 
 def _validate_payment_request(
-    payment_request: str, max_sat: int | None = None
+    payment_request: str, max_sat: int | None = None, amount_msat: int | None = None
 ) -> Bolt11:
+    """
+    Validate a BOLT11 payment request.
+
+    Args:
+        payment_request: The BOLT11 invoice string
+        max_sat: Maximum amount allowed in satoshis
+        amount_msat: Amount to pay for amountless invoices (in millisatoshis)
+
+    Returns:
+        Decoded Bolt11 invoice object
+    """
     try:
         invoice = bolt11_decode(payment_request)
     except Exception as exc:
         raise PaymentError("Bolt11 decoding failed.", status="failed") from exc
 
-    if not invoice.amount_msat or not invoice.amount_msat > 0:
-        raise PaymentError("Amountless invoices not supported.", status="failed")
+    # Check if this is an amountless invoice
+    if not invoice.amount_msat or invoice.amount_msat <= 0:
+        # Amountless invoice - check if funding source supports it and amount provided
+        funding_source = get_funding_source()
+        if not funding_source.has_feature(Feature.amountless_invoice):
+            raise PaymentError(
+                "Amountless invoices not supported by the funding source.",
+                status="failed",
+            )
+        if not amount_msat or amount_msat <= 0:
+            raise PaymentError(
+                "Amount required for amountless invoices.",
+                status="failed",
+            )
+        # Use provided amount for max_sat check
+        check_amount_msat = amount_msat
+    else:
+        check_amount_msat = invoice.amount_msat
 
     max_sat = max_sat or settings.lnbits_max_outgoing_payment_amount_sats
     max_sat = min(max_sat, settings.lnbits_max_outgoing_payment_amount_sats)
-    if invoice.amount_msat > max_sat * 1000:
+    if check_amount_msat > max_sat * 1000:
         raise PaymentError(
-            f"Invoice amount {invoice.amount_msat // 1000} sats is too high. "
+            f"Invoice amount {check_amount_msat // 1000} sats is too high. "
             f"Max allowed: {max_sat} sats.",
             status="failed",
         )

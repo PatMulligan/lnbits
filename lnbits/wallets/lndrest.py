@@ -30,7 +30,7 @@ class LndRestWallet(Wallet):
     """https://api.lightning.community/#lnd-rest-api-reference"""
 
     __node_cls__ = LndRestNode
-    features = [Feature.nodemanager, Feature.holdinvoice]
+    features = [Feature.nodemanager, Feature.holdinvoice, Feature.amountless_invoice]
 
     def __init__(self):
         if not settings.lnd_rest_endpoint:
@@ -170,8 +170,10 @@ class LndRestWallet(Wallet):
                 ok=False, error_message=f"Unable to connect to {self.endpoint}."
             )
 
-    async def pay_invoice(self, bolt11: str, fee_limit_msat: int) -> PaymentResponse:
-        req = {
+    async def pay_invoice(
+        self, bolt11: str, fee_limit_msat: int, amount_msat: int | None = None
+    ) -> PaymentResponse:
+        req: dict = {
             "payment_request": bolt11,
             "fee_limit_msat": fee_limit_msat,
             "timeout_seconds": 30,
@@ -179,6 +181,9 @@ class LndRestWallet(Wallet):
         }
         if settings.lnd_rest_allow_self_payment:
             req["allow_self_payment"] = 1
+        # For amountless invoices, specify the amount to pay
+        if amount_msat is not None:
+            req["amt_msat"] = amount_msat
 
         try:
             r = await self.client.post(

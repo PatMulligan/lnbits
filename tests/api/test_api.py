@@ -997,3 +997,71 @@ async def _create_some_payments(payment_count: int, client, payments_headers):
         data = response.json()
         assert data["labels"] == labels
     return payment_count
+
+
+################################ Amountless Invoices ################################
+
+
+@pytest.mark.anyio
+async def test_pay_amountless_invoice_with_amount(client, adminkey_headers_from):
+    """Test paying an amountless invoice by specifying amount_msat.
+
+    This tests the primary use case: receiving an amountless invoice from an
+    external source and paying it with a specified amount.
+    """
+    from lnbits.wallets import get_funding_source
+
+    # Create an amountless invoice directly using FakeWallet
+    # (bypassing the service layer which blocks amountless invoices for creation)
+    funding_source = get_funding_source()
+    invoice_response = await funding_source.create_invoice(
+        amount=0, memo="test_amountless_external"
+    )
+    assert invoice_response.ok
+    assert invoice_response.payment_request
+
+    # Verify it's amountless
+    decoded = bolt11.decode(invoice_response.payment_request)
+    assert decoded.amount_msat is None
+
+    # Pay the amountless invoice with an explicit amount via API
+    pay_data = {
+        "out": True,
+        "bolt11": invoice_response.payment_request,
+        "amount_msat": 5000,  # 5 sats in msat
+    }
+    response = await client.post(
+        "/api/v1/payments", json=pay_data, headers=adminkey_headers_from
+    )
+    assert response.status_code < 300
+    payment = response.json()
+    assert "payment_hash" in payment
+    assert payment["payment_hash"] == invoice_response.checking_id
+
+
+@pytest.mark.anyio
+async def test_pay_amountless_invoice_without_amount_fails(
+    client, adminkey_headers_from
+):
+    """Test that paying an amountless invoice without amount_msat fails."""
+    from lnbits.wallets import get_funding_source
+
+    # Create an amountless invoice directly using FakeWallet
+    funding_source = get_funding_source()
+    invoice_response = await funding_source.create_invoice(
+        amount=0, memo="test_fail_amountless"
+    )
+    assert invoice_response.ok
+    assert invoice_response.payment_request
+
+    # Try to pay without specifying amount - should fail
+    pay_data = {
+        "out": True,
+        "bolt11": invoice_response.payment_request,
+    }
+    response = await client.post(
+        "/api/v1/payments", json=pay_data, headers=adminkey_headers_from
+    )
+    # Should fail because amount is required for amountless invoices
+    assert response.status_code >= 400
+    assert "Amount required" in response.json().get("detail", "")

@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 class Feature(Enum):
     nodemanager = "nodemanager"
     holdinvoice = "holdinvoice"
+    amountless_invoice = "amountless_invoice"
     # bolt12 = "bolt12"
 
 
@@ -137,8 +138,21 @@ class Wallet(ABC):
 
     @abstractmethod
     def pay_invoice(
-        self, bolt11: str, fee_limit_msat: int
+        self, bolt11: str, fee_limit_msat: int, amount_msat: int | None = None
     ) -> Coroutine[None, None, PaymentResponse]:
+        """
+        Pay a BOLT11 invoice.
+
+        Args:
+            bolt11: The BOLT11 invoice string
+            fee_limit_msat: Maximum fee in millisatoshis
+            amount_msat: Amount to pay in millisatoshis. Required for amountless
+                invoices on wallets that support Feature.amountless_invoice.
+                Ignored for invoices that already contain an amount.
+
+        Returns:
+            PaymentResponse indicating success, failure, or pending status
+        """
         pass
 
     @abstractmethod

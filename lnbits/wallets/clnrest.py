@@ -248,7 +248,7 @@ class CLNRestWallet(Wallet):
         self,
         bolt11: str,
         fee_limit_msat: int,
-        **_,
+        amount_msat: int | None = None,
     ) -> PaymentResponse:
 
         try:

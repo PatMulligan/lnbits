@@ -88,7 +88,7 @@ class LndWallet(Wallet):
     router_rpc: RouterStub
     invoices_rpc: InvoicesStub
 
-    features = [Feature.holdinvoice]
+    features = [Feature.holdinvoice, Feature.amountless_invoice]
 
     def __init__(self):
         if not settings.lnd_grpc_endpoint:
@@ -185,7 +185,9 @@ class LndWallet(Wallet):
             preimage=preimage,
         )
 
-    async def pay_invoice(self, bolt11: str, fee_limit_msat: int) -> PaymentResponse:
+    async def pay_invoice(
+        self, bolt11: str, fee_limit_msat: int, amount_msat: int | None = None
+    ) -> PaymentResponse:
         # fee_limit_fixed = ln.FeeLimit(fixed=fee_limit_msat // 1000)
         req = SendPaymentRequest(
             payment_request=bolt11,
@@ -193,6 +195,9 @@ class LndWallet(Wallet):
             timeout_seconds=30,
             no_inflight_updates=True,
         )
+        # For amountless invoices, specify the amount to pay
+        if amount_msat is not None:
+            req.amt_msat = amount_msat
         try:
             res: Payment = await self.router_rpc.SendPaymentV2(req).read()
         except Exception as exc:

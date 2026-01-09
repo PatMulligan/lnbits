@@ -263,6 +263,7 @@ async def api_payments_create(
             payment_request=invoice_data.bolt11,
             extra=invoice_data.extra,
             labels=invoice_data.labels,
+            amount_msat=invoice_data.amount_msat,
         )
         return payment
 
