@@ -307,11 +307,25 @@ window.PageWallet = {
         return
       }
 
+      // Check if invoice is amountless (no amount specified)
+      const isAmountless =
+        !invoice.human_readable_part.amount ||
+        invoice.human_readable_part.amount === 0
+
       let cleanInvoice = {
-        msat: invoice.human_readable_part.amount,
-        sat: invoice.human_readable_part.amount / 1000,
-        fsat: LNbits.utils.formatSat(invoice.human_readable_part.amount / 1000),
-        bolt11: this.parse.data.request
+        msat: isAmountless ? null : invoice.human_readable_part.amount,
+        sat: isAmountless ? null : invoice.human_readable_part.amount / 1000,
+        fsat: isAmountless
+          ? this.$t('any_amount')
+          : LNbits.utils.formatSat(invoice.human_readable_part.amount / 1000),
+        bolt11: this.parse.data.request,
+        isAmountless: isAmountless
+      }
+
+      // Initialize amount for amountless invoices
+      if (isAmountless) {
+        this.parse.data.amount = null
+        this.parse.data.unit = 'sat'
       }
 
       _.each(invoice.data.tags, tag => {
@@ -347,7 +361,7 @@ window.PageWallet = {
         }
       })
 
-      if (this.g.wallet.currency) {
+      if (this.g.wallet.currency && !isAmountless) {
         cleanInvoice.fiatAmount = LNbits.utils.formatCurrency(
           ((cleanInvoice.sat / 1e8) * this.g.exchangeRate).toFixed(2),
           this.g.wallet.currency
@@ -357,16 +371,35 @@ window.PageWallet = {
       this.parse.invoice = Object.freeze(cleanInvoice)
     },
     payInvoice() {
+      // Validate amount for amountless invoices
+      if (this.parse.invoice.isAmountless) {
+        if (!this.parse.data.amount || this.parse.data.amount <= 0) {
+          Quasar.Notify.create({
+            timeout: 3000,
+            type: 'warning',
+            message: this.$t('amount_must_be_positive')
+          })
+          return
+        }
+      }
+
       const dismissPaymentMsg = Quasar.Notify.create({
         timeout: 0,
         message: this.$t('payment_processing')
       })
 
+      // Calculate amount_msat for amountless invoices
+      let amountMsat = null
+      if (this.parse.invoice.isAmountless && this.parse.data.amount) {
+        amountMsat = this.parse.data.amount * 1000 // Convert sats to msats
+      }
+
       LNbits.api
         .payInvoice(
           this.g.wallet,
           this.parse.data.request,
-          this.parse.data.internalMemo
+          this.parse.data.internalMemo,
+          amountMsat
         )
         .then(response => {
           dismissPaymentMsg()

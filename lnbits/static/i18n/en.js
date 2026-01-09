@@ -217,6 +217,8 @@ window.localisation.en = {
   amount: 'Amount',
   amount_limits: 'Amount Limits',
   amount_sats: 'Amount (sats)',
+  amount_must_be_positive: 'Amount must be greater than 0',
+  any_amount: 'Any Amount',
   faucest_wallet: 'Faucet Wallet',
   faucest_wallet_desc_1:
     'Each time a payment is confirmed by the {provider} provider funds will be subtracted from this wallet.',

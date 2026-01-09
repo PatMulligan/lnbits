@@ -458,7 +458,26 @@
     <q-card class="q-pa-lg q-pt-xl lnbits__dialog-card">
       <div v-if="parse.invoice">
         <div class="column content-center text-center q-mb-md">
-          <div v-if="!g.isFiatPriority">
+          <!-- Amountless invoice: show amount input -->
+          <div v-if="parse.invoice.isAmountless">
+            <h5
+              class="q-my-none text-bold q-mb-sm"
+              v-text="$t('any_amount')"
+            ></h5>
+            <q-input
+              filled
+              dense
+              v-model.number="parse.data.amount"
+              type="number"
+              :label="$t('amount') + ' (sat) *'"
+              min="1"
+              class="q-mx-auto"
+              style="max-width: 200px"
+              autofocus
+            ></q-input>
+          </div>
+          <!-- Regular invoice with amount -->
+          <div v-else-if="!g.isFiatPriority">
             <h4 class="q-my-none text-bold">
               <span
                 v-text="utils.formatBalance(parse.invoice.sat, g.denomination)"
@@ -473,7 +492,7 @@
           </div>
           <div class="q-my-md absolute">
             <q-btn
-              v-if="g.fiatTracking"
+              v-if="g.fiatTracking && !parse.invoice.isAmountless"
               @click="g.isFiatPriority = !g.isFiatPriority"
               flat
               dense
@@ -481,7 +500,7 @@
               color="primary"
             ></q-btn>
           </div>
-          <div v-if="g.fiatTracking">
+          <div v-if="g.fiatTracking && !parse.invoice.isAmountless">
             <div v-if="g.isFiatPriority">
               <h5 class="q-my-none text-bold">
                 <span

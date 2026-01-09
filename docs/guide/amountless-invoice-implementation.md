@@ -31,6 +31,7 @@ This document provides a comprehensive analysis supporting the implementation of
 This implementation adds the ability to pay BOLT11 invoices that don't have an embedded amount by specifying the amount at payment time via the `amount_msat` parameter.
 
 **Key Changes:**
+
 - Added `Feature.amountless_invoice` to wallet base class for capability detection
 - Updated `Wallet.pay_invoice()` signature with optional `amount_msat` parameter
 - Implemented amountless invoice support in LND REST and LND gRPC wallets
@@ -68,6 +69,7 @@ To ensure our implementation follows established patterns, we analyzed three maj
 ### Blixt Wallet (React Native)
 
 **Detection** (`src/state/Send.ts:185`):
+
 ```typescript
 if (!paymentRequest.numSatoshis) {
   // Invoice is amountless - require user input
@@ -75,14 +77,16 @@ if (!paymentRequest.numSatoshis) {
 ```
 
 **Amount Injection** (`src/state/Send.ts:203-204`):
+
 ```typescript
 // Mutate the payment request with user-provided amount
-paymentRequest.numSatoshis = payload.amount;
+paymentRequest.numSatoshis = payload.amount
 ```
 
 **UI Handling** (`src/windows/Send/SendConfirmation.tsx:67-70`):
+
 ```typescript
-const amountEditable = !paymentRequest.numSatoshis;
+const amountEditable = !paymentRequest.numSatoshis
 // Shows editable amount field when invoice has no amount
 ```
 
@@ -91,6 +95,7 @@ const amountEditable = !paymentRequest.numSatoshis;
 ### Breez SDK (Flutter)
 
 **Detection** (`lib/widgets/payment_request_info_dialog.dart:162`):
+
 ```dart
 if (widget.invoice.amount == 0) {
   // Show amount input field
@@ -98,6 +103,7 @@ if (widget.invoice.amount == 0) {
 ```
 
 **Validation** (`lib/widgets/payment_request_info_dialog.dart:251`):
+
 ```dart
 var validationResult = acc.validateOutgoingPayment(amountToPay);
 if (validationResult.isNotEmpty) {
@@ -110,15 +116,17 @@ if (validationResult.isNotEmpty) {
 ### Zeus Wallet (React Native)
 
 **Detection** (`views/PaymentRequest.tsx:602-603`):
+
 ```typescript
-const isNoAmountInvoice = !requestAmount || requestAmount === 0;
+const isNoAmountInvoice = !requestAmount || requestAmount === 0
 ```
 
 **Amount Handling** (`views/Send.tsx:339-341`):
+
 ```typescript
 if (isNoAmountInvoice) {
   // Use amount from user input instead of invoice
-  amountToSend = userEnteredAmount;
+  amountToSend = userEnteredAmount
 }
 ```
 
@@ -128,14 +136,14 @@ if (isNoAmountInvoice) {
 
 All three wallets follow the same logical flow:
 
-| Step | Pattern |
-|------|---------|
-| 1. Decode | Parse BOLT11 invoice |
-| 2. Detect | Check if `amount == 0` or `null` |
-| 3. Prompt | Show UI for amount input if amountless |
-| 4. Validate | Verify amount > 0 and within balance |
-| 5. Inject | Pass amount to payment backend |
-| 6. Pay | Execute payment with specified amount |
+| Step        | Pattern                                |
+| ----------- | -------------------------------------- |
+| 1. Decode   | Parse BOLT11 invoice                   |
+| 2. Detect   | Check if `amount == 0` or `null`       |
+| 3. Prompt   | Show UI for amount input if amountless |
+| 4. Validate | Verify amount > 0 and within balance   |
+| 5. Inject   | Pass amount to payment backend         |
+| 6. Pay      | Execute payment with specified amount  |
 
 ---
 
@@ -165,6 +173,7 @@ message SendPaymentRequest {
 ```
 
 **Key Points:**
+
 - `amt` and `amt_msat` are mutually exclusive
 - When `payment_request` has zero amount, `amt` or `amt_msat` is **required**
 - When `payment_request` has an amount, `amt`/`amt_msat` must **not** be specified
@@ -241,6 +250,7 @@ LNbits uses a layered architecture where changes flow from API → Service → W
 #### 1. Base Wallet Class (`lnbits/wallets/base.py`)
 
 **Feature Declaration:**
+
 ```python
 class Feature(Enum):
     nodemanager = "nodemanager"
@@ -249,6 +259,7 @@ class Feature(Enum):
 ```
 
 **Method Signature:**
+
 ```python
 @abstractmethod
 def pay_invoice(
@@ -270,11 +281,13 @@ def pay_invoice(
 #### 2. LND REST Wallet (`lnbits/wallets/lndrest.py`)
 
 **Feature Declaration:**
+
 ```python
 features = [Feature.nodemanager, Feature.holdinvoice, Feature.amountless_invoice]
 ```
 
 **Payment Implementation:**
+
 ```python
 async def pay_invoice(
     self, bolt11: str, fee_limit_msat: int, amount_msat: int | None = None
@@ -294,6 +307,7 @@ async def pay_invoice(
 #### 3. Payment Service (`lnbits/core/services/payments.py`)
 
 **Validation:**
+
 ```python
 def _validate_payment_request(
     payment_request: str, max_sat: int | None = None, amount_msat: int | None = None
@@ -322,6 +336,7 @@ def _validate_payment_request(
 ```
 
 **Amount Handling:**
+
 ```python
 # Determine the actual amount to pay
 pay_amount_msat = invoice.amount_msat or amount_msat
@@ -373,6 +388,7 @@ curl -X POST "https://lnbits.example.com/api/v1/payments" \
 ```
 
 **Response:**
+
 ```json
 {
   "payment_hash": "abc123...",
@@ -385,14 +401,14 @@ curl -X POST "https://lnbits.example.com/api/v1/payments" \
 
 ## Verification Matrix
 
-| Requirement | LND Spec | Mobile Wallets | LNbits Implementation |
-|-------------|----------|----------------|----------------------|
-| Detect amountless | `payReq.MilliSat == nil` | Check `amount == 0/null` | `not invoice.amount_msat` |
-| Require amount for amountless | Error if `reqAmt == 0` | Show input field | `PaymentError` if not provided |
-| Block amount for regular invoices | Error if `reqAmt != 0` | N/A (UI doesn't allow) | `amountless_amount_msat = None` |
-| Field name | `amt_msat` | N/A (native SDK) | `amt_msat` |
-| Type | int64 (msat) | varies | int (msat) |
-| Feature detection | N/A | Hardcoded | `Feature.amountless_invoice` |
+| Requirement                       | LND Spec                 | Mobile Wallets           | LNbits Implementation           |
+| --------------------------------- | ------------------------ | ------------------------ | ------------------------------- |
+| Detect amountless                 | `payReq.MilliSat == nil` | Check `amount == 0/null` | `not invoice.amount_msat`       |
+| Require amount for amountless     | Error if `reqAmt == 0`   | Show input field         | `PaymentError` if not provided  |
+| Block amount for regular invoices | Error if `reqAmt != 0`   | N/A (UI doesn't allow)   | `amountless_amount_msat = None` |
+| Field name                        | `amt_msat`               | N/A (native SDK)         | `amt_msat`                      |
+| Type                              | int64 (msat)             | varies                   | int (msat)                      |
+| Feature detection                 | N/A                      | Hardcoded                | `Feature.amountless_invoice`    |
 
 ---
 
@@ -413,6 +429,7 @@ curl -X POST "https://lnbits.example.com/api/v1/payments" \
 Two test cases cover the amountless invoice functionality:
 
 ### Happy Path
+
 ```python
 @pytest.mark.anyio
 async def test_pay_amountless_invoice_with_amount(client, adminkey_headers_from):
@@ -423,6 +440,7 @@ async def test_pay_amountless_invoice_with_amount(client, adminkey_headers_from)
 ```
 
 ### Error Case
+
 ```python
 @pytest.mark.anyio
 async def test_pay_amountless_invoice_without_amount_fails(client, adminkey_headers_from):

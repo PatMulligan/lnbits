@@ -39,7 +39,7 @@ window._lnbitsApi = {
     }
     return this.request('post', '/api/v1/payments', wallet.inkey, data)
   },
-  payInvoice(wallet, bolt11, internalMemo = null) {
+  payInvoice(wallet, bolt11, internalMemo = null, amountMsat = null) {
     const data = {
       out: true,
       bolt11: bolt11
@@ -48,6 +48,9 @@ window._lnbitsApi = {
       data.extra = {
         internal_memo: String(internalMemo)
       }
+    }
+    if (amountMsat) {
+      data.amount_msat = amountMsat
     }
     return this.request('post', '/api/v1/payments', wallet.adminkey, data)
   },
