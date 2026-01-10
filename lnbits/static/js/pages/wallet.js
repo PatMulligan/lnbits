@@ -308,16 +308,17 @@ window.PageWallet = {
       }
 
       // Check if invoice is amountless (no amount specified)
+      // The decoder returns 'Any amount' string for amountless invoices
+      const invoiceAmount = invoice.human_readable_part.amount
       const isAmountless =
-        !invoice.human_readable_part.amount ||
-        invoice.human_readable_part.amount === 0
+        typeof invoiceAmount !== 'number' || invoiceAmount <= 0
 
       let cleanInvoice = {
-        msat: isAmountless ? null : invoice.human_readable_part.amount,
-        sat: isAmountless ? null : invoice.human_readable_part.amount / 1000,
+        msat: isAmountless ? null : invoiceAmount,
+        sat: isAmountless ? null : invoiceAmount / 1000,
         fsat: isAmountless
           ? this.$t('any_amount')
-          : LNbits.utils.formatSat(invoice.human_readable_part.amount / 1000),
+          : LNbits.utils.formatSat(invoiceAmount / 1000),
         bolt11: this.parse.data.request,
         isAmountless: isAmountless
       }
